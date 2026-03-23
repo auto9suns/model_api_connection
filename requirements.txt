@@ -1,4 +1,7 @@
+# Core dependencies (needed for model_connector)
 openai>=1.0.0
 anthropic>=0.20.0
 python-dotenv>=0.21.0
+
+# Tool dependencies (only needed for fetch_models.py)
 litellm>=1.40.0

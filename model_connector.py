@@ -32,6 +32,14 @@ import os
 from pathlib import Path
 from typing import Iterator
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+
+__all__ = ["LLMConnector", "chat", "get_connector", "strip_think_stream"]
 
 CONFIG_PATH = Path(__file__).parent / "models_config.json"
 
@@ -254,3 +262,39 @@ def chat(
 ) -> str | Iterator[str]:
     """Module-level shortcut — no need to instantiate LLMConnector."""
     return get_connector().chat(messages, provider=provider, model=model, stream=stream, **kwargs)
+
+
+def strip_think_stream(chunks: Iterator[str]) -> Iterator[str]:
+    """Remove <think>...</think> reasoning blocks from a streaming response.
+
+    Useful with reasoning models (DeepSeek-R1, Kimi-K2.5) that output
+    chain-of-thought wrapped in <think> tags before the final answer.
+    """
+    OPEN, CLOSE = "<think>", "</think>"
+    buf, in_think = "", False
+    for chunk in chunks:
+        buf += chunk
+        out = ""
+        while True:
+            if in_think:
+                idx = buf.find(CLOSE)
+                if idx == -1:
+                    buf = buf[-(len(CLOSE) - 1):] if len(buf) >= len(CLOSE) else buf
+                    break
+                buf = buf[idx + len(CLOSE):].lstrip("\n")
+                in_think = False
+            else:
+                idx = buf.find(OPEN)
+                if idx == -1:
+                    tail = len(OPEN) - 1
+                    if len(buf) > tail:
+                        out += buf[:-tail]
+                        buf = buf[-tail:]
+                    break
+                out += buf[:idx]
+                buf = buf[idx + len(OPEN):]
+                in_think = True
+        if out:
+            yield out
+    if buf and not in_think:
+        yield buf
