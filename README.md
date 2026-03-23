@@ -1,41 +1,64 @@
 # LLM API Connector
 
-A lightweight, config-driven Python connector for multiple LLM providers. Import it in any script or tool — one unified interface regardless of provider.
-
-**Supported providers:** OpenAI · Anthropic (Claude) · Google (Gemini) · SiliconFlow
+轻量级、配置驱动的多模型统一连接器。一次 import，统一调用 OpenAI / Anthropic / Gemini / SiliconFlow。
 
 ---
 
-## Files
+## 快速接入（其他项目）
 
-| File | Purpose |
-|------|---------|
-| `model_connector.py` | Core connector — import this in your scripts |
-| `models_config.json` | Model registry (edit here to add/update models) |
-| `test_models.py` | Verify API keys and model connectivity |
-| `fetch_models.py` | Fetch live model lists from provider APIs |
-| `.env.example` | API key template |
+```bash
+# 推荐：安装为可编辑包
+pip install -e /path/to/model_api_connection
+
+# 如需 fetch_models.py 的工具依赖
+pip install -e "/path/to/model_api_connection[tools]"
+```
+
+```python
+from model_connector import chat, LLMConnector, strip_think_stream
+
+# 一句话调用（模块级快捷方式，无需实例化）
+response = chat("你好", provider="openai")
+
+# 实例化方式（可自定义 config_path / api_keys）
+llm = LLMConnector()
+response = llm.chat("你好", provider="openai")
+```
 
 ---
 
-## Setup
+## 文件结构
 
-**1. Install dependencies**
+| 文件 | 用途 |
+|------|------|
+| `model_connector.py` | 核心连接器 — 其他项目 import 这个 |
+| `models_config.json` | 模型注册表（增删模型改这里） |
+| `test_models.py` | CLI 工具：验证 API key 和模型连通性 |
+| `fetch_models.py` | CLI 工具：从 API 拉取最新模型列表 |
+| `_fetch_helpers.py` | fetch_models.py 的内部辅助模块 |
+| `tests/` | 单元测试（`pytest tests/`） |
+| `.env.example` | API key 模板 |
+
+---
+
+## 安装
+
+**1. 安装依赖**
 
 ```bash
 pip install -r requirements.txt
-# or manually:
-pip install openai anthropic python-dotenv litellm
+# 或安装为包：
+pip install -e .
 ```
 
-**2. Configure API keys**
+**2. 配置 API key**
 
 ```bash
 cp .env.example .env
-# Edit .env and fill in your keys
+# 编辑 .env 填入你的 key
 ```
 
-Or export directly:
+或直接导出环境变量：
 
 ```bash
 export OPENAI_API_KEY=sk-...
@@ -46,30 +69,55 @@ export SILICONFLOW_API_KEY=sf-...
 
 ---
 
-## Usage
+## 公共 API
 
-### Basic import
+模块导出 4 个公共符号（`__all__`）：
+
+### 模块级函数
+
+| 函数签名 | 返回值 | 说明 |
+|----------|--------|------|
+| `chat(messages, *, provider, model=None, stream=False, **kwargs)` | `str \| Iterator[str]` | 模块级快捷调用，无需实例化 |
+| `get_connector(**kwargs)` | `LLMConnector` | 获取/创建单例连接器 |
+| `strip_think_stream(chunks: Iterator[str])` | `Iterator[str]` | 过滤流式输出中的 `<think>...</think>` 推理块，只保留最终回答 |
+
+### LLMConnector 类
+
+**构造函数：** `LLMConnector(config_path=None, api_keys=None)`
+
+| 方法签名 | 返回值 | 说明 |
+|----------|--------|------|
+| `chat(messages, *, provider, model=None, stream=False, **kwargs)` | `str \| Iterator[str]` | 发送聊天请求 |
+| `list_providers()` | `list[str]` | 所有已配置的 provider 名称 |
+| `list_models(provider)` | `list[str]` | 指定 provider 的所有模型名 |
+| `default_model(provider)` | `str` | 指定 provider 的默认模型 |
+
+---
+
+## 使用示例
+
+### 基本调用
 
 ```python
 from model_connector import LLMConnector
 
 llm = LLMConnector()
 
-# Single message
+# 单条消息
 response = llm.chat("你好", provider="siliconflow", model="deepseek-v3")
 
-# Use provider default model
+# 使用 provider 默认模型
 response = llm.chat("Hi", provider="openai")
 ```
 
-### Streaming
+### 流式输出
 
 ```python
 for chunk in llm.chat("解释量子纠缠", provider="anthropic", model="sonnet-4.6", stream=True):
     print(chunk, end="", flush=True)
 ```
 
-### Multi-turn conversation
+### 多轮对话
 
 ```python
 messages = [
@@ -81,7 +129,7 @@ messages = [
 response = llm.chat(messages, provider="openai", model="gpt-4o")
 ```
 
-### Module-level shortcut (no instantiation needed)
+### 模块级快捷调用（无需实例化）
 
 ```python
 from model_connector import chat
@@ -89,75 +137,37 @@ from model_connector import chat
 response = chat("Hi", provider="gemini", model="gemini-2.0-flash")
 ```
 
-### Extra API parameters
+### 传递额外 API 参数
 
 ```python
 response = llm.chat("...", provider="openai", model="gpt-4o", temperature=0.2, max_tokens=512)
 ```
 
-### Reasoning models — filtering `<think>` blocks
+### 推理模型 — 过滤 `<think>` 块
 
-Models like **DeepSeek-R1** and **Kimi-K2.5** output a chain-of-thought reasoning process before the final answer. The connector automatically wraps this reasoning in `<think>...</think>` tags in the stream, so callers can detect and handle it consistently.
+DeepSeek-R1、Kimi-K2.5 等推理模型会在最终回答前输出思考过程。连接器会自动将推理内容包裹在 `<think>...</think>` 标签中。
 
-**Default stream output (reasoning visible):**
-
-```python
-for chunk in llm.chat("解释递归", provider="siliconflow", model="deepseek-r1", stream=True):
-    print(chunk, end="", flush=True)
-# Output: <think>让我思考一下...</think>递归是指函数调用自身...
-```
-
-**Strip reasoning from stream** — use this helper to get only the final answer:
+用 `strip_think_stream()` 只获取最终回答：
 
 ```python
-def strip_think_stream(chunks):
-    """Remove <think>...</think> blocks from a streaming response."""
-    OPEN, CLOSE = "<think>", "</think>"
-    buf, in_think = "", False
-    for chunk in chunks:
-        buf += chunk
-        out = ""
-        while True:
-            if in_think:
-                idx = buf.find(CLOSE)
-                if idx == -1:
-                    buf = buf[-(len(CLOSE)-1):] if len(buf) >= len(CLOSE) else buf
-                    break
-                buf = buf[idx + len(CLOSE):].lstrip("\n")
-                in_think = False
-            else:
-                idx = buf.find(OPEN)
-                if idx == -1:
-                    tail = len(OPEN) - 1
-                    if len(buf) > tail:
-                        out += buf[:-tail]
-                        buf = buf[-tail:]
-                    break
-                out += buf[:idx]
-                buf = buf[idx + len(OPEN):]
-                in_think = True
-        if out:
-            yield out
-    if buf and not in_think:
-        yield buf
+from model_connector import chat, strip_think_stream
 
-# Usage
-raw = llm.chat("解释递归", provider="siliconflow", model="deepseek-r1", stream=True)
-for chunk in strip_think_stream(raw):
+stream = chat("解释递归", provider="siliconflow", model="deepseek-r1", stream=True)
+for chunk in strip_think_stream(stream):
     print(chunk, end="", flush=True)
-# Output: 递归是指函数调用自身...（无推理过程）
+# 输出：递归是指函数调用自身...（无推理过程）
 ```
 
-**Why `<think>` tags?** The underlying API returns reasoning in a separate `reasoning_content` field (not `content`). The connector wraps it with `<think>...</think>` so every caller sees a single unified text stream and can filter consistently — no need to know about the provider's internal field structure.
+**为什么用 `<think>` 标签？** 底层 API 将推理内容放在单独的 `reasoning_content` 字段中。连接器用 `<think>...</think>` 包裹后，调用方只需处理一个统一文本流，无需关心各 provider 的内部字段结构。
 
 ---
 
-## Model names
+## 模型名称
 
-Model keys in `models_config.json` are short and human-readable. Values are the exact official API IDs.
+`models_config.json` 中的 key 是简短易记的别名，value 是发送给 API 的官方 ID。
 
-| Provider | Key (what you type) | Value (sent to API) |
-|----------|--------------------|--------------------|
+| Provider | Key（你输入的） | Value（发给 API 的） |
+|----------|-----------------|---------------------|
 | openai | `gpt-4o` | `gpt-4o` |
 | openai | `o4-mini` | `o4-mini` |
 | anthropic | `sonnet-4.6` | `claude-sonnet-4-6` |
@@ -166,17 +176,17 @@ Model keys in `models_config.json` are short and human-readable. Values are the 
 | siliconflow | `deepseek-v3` | `deepseek-ai/DeepSeek-V3` |
 | siliconflow | `qwq-32b` | `Qwen/QwQ-32B` |
 
-You can also pass a raw model ID not yet in the config — it will be forwarded directly:
+也可以直接传未在 config 中注册的模型 ID，会原样转发：
 
 ```python
-llm.chat("Hi", provider="openai", model="gpt-5")  # not in config yet, passed through as-is
+chat("Hi", provider="openai", model="gpt-5")  # 未注册的名称，直接透传
 ```
 
 ---
 
-## Updating models
+## 更新模型
 
-When providers release new models, edit `models_config.json`:
+新模型发布时，编辑 `models_config.json`：
 
 ```json
 "siliconflow": {
@@ -186,75 +196,100 @@ When providers release new models, edit `models_config.json`:
 }
 ```
 
-Use `fetch_models.py` to discover new model IDs from the live API.
+用 `fetch_models.py` 从 API 查询最新可用模型。
 
 ---
 
-## Scripts
+## CLI 工具
 
-### Test API connectivity
-
-```bash
-# Quick check — default model per provider
-python test_models.py
-
-# Test all models for one provider
-python test_models.py --provider siliconflow --all
-
-# Test a specific model
-python test_models.py --provider anthropic --model sonnet-4.6
-
-# Full test across all providers and all models
-python test_models.py --all
-```
-
-### Fetch live model lists
-
-All runs always show: **Model ID · Age · $/1M (in/out) · Ctx · Flags · Description**
+### 测试 API 连通性
 
 ```bash
-# All providers — models released in last 6 months
-python fetch_models.py
-
-# All models regardless of age
-python fetch_models.py --all
-
-# Only models listed in models_config.json (still calls provider API)
-python fetch_models.py --current
-
-# One provider
-python fetch_models.py --provider openai
-
-# One provider, config models only, all ages
-python fetch_models.py --provider anthropic --current --all
-
-# Custom recency window
-python fetch_models.py --months 3
+python test_models.py                              # 测试所有 provider 的默认模型
+python test_models.py --provider siliconflow --all  # 测试某个 provider 的所有模型
+python test_models.py --provider anthropic --model sonnet-4.6  # 测试特定模型
+python test_models.py --all                         # 全量测试
 ```
 
-**Columns:**
+### 拉取在线模型列表
 
-| Column | Source | Notes |
-|--------|--------|-------|
-| Model ID | Provider API | filtered to config models with `--current` |
-| Age | API timestamp → name extraction fallback | e.g. `preview-04-17` → Apr 17 |
-| `$/1M in/out` | LiteLLM (USD) / siliconflow.cn/pricing (¥ CNY) | `—` if not found |
-| `Ctx` | LiteLLM `max_input_tokens` | context window size |
-| `Flags` | LiteLLM capability fields | `V`=vision `F`=tools `R`=reasoning `C`=cache `S`=schema |
-| Description | `display_name` (Anthropic/Gemini) · LiteLLM mode | e.g. `Claude Sonnet 4.6`, `[chat]` |
+显示：**Model ID · Age · $/1M (in/out) · Ctx · Flags · Description**
 
-**`--current`:** calls the provider API as normal, but filters results to only the model IDs defined in `models_config.json`. Useful for auditing exactly what's configured and its current pricing/capabilities.
+```bash
+python fetch_models.py                    # 所有 provider，最近 6 个月
+python fetch_models.py --all              # 全部模型，不限时间
+python fetch_models.py --current          # 只显示 models_config.json 中已配置的
+python fetch_models.py --provider openai  # 单个 provider
+python fetch_models.py --months 3         # 自定义时间窗口
+```
+
+**列说明：**
+
+| 列 | 来源 | 备注 |
+|----|------|------|
+| Model ID | Provider API | 加 `--current` 后只显示 config 中的 |
+| Age | API 时间戳 → 模型名解析兜底 | 如 `preview-04-17` → 4月17日 |
+| `$/1M in/out` | LiteLLM (USD) / siliconflow.cn/pricing (¥ CNY) | 无数据显示 `—` |
+| `Ctx` | LiteLLM `max_input_tokens` | 上下文窗口大小 |
+| `Flags` | LiteLLM 能力字段 | `V`=视觉 `F`=工具调用 `R`=推理 `C`=缓存 `S`=结构化输出 |
+| Description | `display_name` (Anthropic/Gemini) · LiteLLM mode | 如 `Claude Sonnet 4.6` |
+
+### 运行单元测试
+
+```bash
+pytest tests/
+```
 
 ---
 
-## Using in other projects
+## 在其他项目中使用
 
-Since the connector and config live in a fixed directory, add this to any script that imports it:
+### 推荐：pip install
+
+```bash
+pip install -e /path/to/model_api_connection
+```
+
+然后直接 import：
+
+```python
+from model_connector import chat, LLMConnector, strip_think_stream
+```
+
+### 备选：sys.path（免安装）
 
 ```python
 import sys
 sys.path.insert(0, "/path/to/model_api_connection")
-from model_connector import LLMConnector
+from model_connector import chat
 ```
 
-Or install as an editable package by adding a minimal `pyproject.toml` if needed.
+### 给 AI Agent 的调用指南
+
+在其他项目的 `CLAUDE.md` 中加入以下内容，AI 即可直接调用：
+
+```markdown
+## LLM API 调用
+
+本项目通过 model_api_connection 连接大模型（已 pip install -e 安装）。
+
+\```python
+from model_connector import chat, LLMConnector, strip_think_stream
+
+# 一句话调用
+response = chat("prompt", provider="openai")  # 可选: anthropic / gemini / siliconflow
+
+# 流式输出
+for chunk in chat("prompt", provider="anthropic", stream=True):
+    print(chunk, end="")
+
+# 推理模型去除思考过程
+for chunk in strip_think_stream(chat("prompt", provider="siliconflow", model="deepseek-r1", stream=True)):
+    print(chunk, end="")
+
+# 查看可用模型
+LLMConnector().list_models("openai")
+\```
+
+可用 provider: openai, anthropic, gemini, siliconflow
+```
