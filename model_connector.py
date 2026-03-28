@@ -1,18 +1,18 @@
 """
-Universal LLM API Connector
-============================
-Supports: OpenAI, Anthropic (Claude), Google (Gemini), SiliconFlow (and any OpenAI-compatible provider)
+Universal LLM API Connector (powered by litellm)
+==================================================
+Supports: OpenAI, Anthropic, Gemini, SiliconFlow, Poe, and any OpenAI-compatible provider.
 
 Usage:
     from model_connector import LLMConnector
 
     llm = LLMConnector()
 
-    # Basic call — model name must match the key in models_config.json exactly
-    response = llm.chat("你好", provider="siliconflow", model="deepseek-ai/DeepSeek-V3")
+    # Basic call
+    response = llm.chat("你好", provider="siliconflow", model="deepseek-v3")
 
     # Streaming
-    for chunk in llm.chat("解释量子纠缠", provider="anthropic", model="claude-sonnet-4-6", stream=True):
+    for chunk in llm.chat("解释量子纠缠", provider="anthropic", model="sonnet-4.6", stream=True):
         print(chunk, end="", flush=True)
 
     # Multi-turn
@@ -23,6 +23,13 @@ Usage:
     ]
     response = llm.chat(messages, provider="openai", model="gpt-4o")
 
+    # Function calling / Tool use
+    tools = [{"type": "function", "function": {
+        "name": "get_weather", "description": "Get weather for a city",
+        "parameters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]},
+    }}]
+    response = llm.chat("北京天气怎么样？", provider="openai", tools=tools)
+
     # Use default model for provider
     response = llm.chat("Hi", provider="openai")
 """
@@ -31,6 +38,8 @@ import json
 import os
 from pathlib import Path
 from typing import Iterator
+
+import litellm
 
 try:
     from dotenv import load_dotenv
@@ -42,85 +51,6 @@ except ImportError:
 __all__ = ["LLMConnector", "chat", "get_connector", "strip_think_stream"]
 
 CONFIG_PATH = Path(__file__).parent / "models_config.json"
-
-
-# ── Provider implementations ───────────────────────────────────────────────────
-
-class _OpenAIProvider:
-    """Handles OpenAI-compatible APIs (OpenAI, Gemini, SiliconFlow, etc.)."""
-
-    def __init__(self, api_key: str, base_url: str | None = None):
-        from openai import OpenAI
-        self.client = OpenAI(api_key=api_key, **({"base_url": base_url} if base_url else {}))
-
-    def chat(self, messages: list[dict], model: str, stream: bool, **kwargs) -> str | Iterator[str]:
-        response = self.client.chat.completions.create(
-            model=model, messages=messages, stream=stream, **kwargs
-        )
-        if stream:
-            return self._stream(response)
-        return response.choices[0].message.content
-
-    def _stream(self, response) -> Iterator[str]:
-        in_reasoning = False
-        for chunk in response:
-            if not chunk.choices:
-                continue
-            delta = chunk.choices[0].delta
-            has_reasoning = hasattr(delta, "reasoning_content") and delta.reasoning_content
-            has_content   = bool(delta.content)
-
-            if has_reasoning:
-                if not in_reasoning:
-                    yield "<think>"
-                    in_reasoning = True
-                yield delta.reasoning_content
-
-            if has_content:
-                if in_reasoning:
-                    yield "</think>"
-                    in_reasoning = False
-                yield delta.content
-
-        if in_reasoning:
-            yield "</think>"
-
-
-class _AnthropicProvider:
-    """Handles Anthropic Claude API."""
-
-    def __init__(self, api_key: str):
-        from anthropic import Anthropic
-        self.client = Anthropic(api_key=api_key)
-
-    def chat(self, messages: list[dict], model: str, stream: bool, **kwargs) -> str | Iterator[str]:
-        system = None
-        filtered = []
-        for m in messages:
-            if m["role"] == "system":
-                system = m["content"]
-            else:
-                filtered.append(m)
-
-        create_kwargs = dict(
-            model=model,
-            max_tokens=kwargs.pop("max_tokens", 8096),
-            messages=filtered,
-            **kwargs,
-        )
-        if system:
-            create_kwargs["system"] = system
-
-        if stream:
-            return self._stream(create_kwargs)
-
-        response = self.client.messages.create(**create_kwargs)
-        return response.content[0].text
-
-    def _stream(self, create_kwargs) -> Iterator[str]:
-        with self.client.messages.stream(**create_kwargs) as stream:
-            for text in stream.text_stream:
-                yield text
 
 
 # ── Main connector ─────────────────────────────────────────────────────────────
@@ -143,7 +73,6 @@ class LLMConnector:
         with open(cfg_path, "r", encoding="utf-8") as f:
             self._config = json.load(f)
         self._api_keys_override = api_keys or {}
-        self._provider_cache: dict = {}
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -157,7 +86,7 @@ class LLMConnector:
         **kwargs,
     ) -> str | Iterator[str]:
         """
-        Send a chat request.
+        Send a chat request via litellm.
 
         Parameters
         ----------
@@ -165,34 +94,48 @@ class LLMConnector:
             Plain string, or full message list:
             [{"role": "user"|"assistant"|"system", "content": "..."}]
         provider : str
-            Provider key from models_config.json ("openai", "anthropic", "gemini", "siliconflow").
+            Provider key from models_config.json.
         model : str, optional
-            Official model name as listed in models_config.json.
+            Model alias as listed in models_config.json.
             Uses the provider's default_model if omitted.
         stream : bool
             Return a text-chunk generator instead of a full string.
         **kwargs
-            Forwarded to the underlying API (temperature, max_tokens, etc.).
+            Forwarded to litellm.completion (temperature, max_tokens, tools, etc.).
         """
         if isinstance(messages, str):
             messages = [{"role": "user", "content": messages}]
 
         prov_cfg = self._get_provider_config(provider)
         model_id = self._resolve_model(prov_cfg, model)
-        client = self._get_client(provider, prov_cfg)
+        api_key = self._get_api_key(provider, prov_cfg)
 
-        return client.chat(messages, model=model_id, stream=stream, **kwargs)
+        litellm_kwargs = {
+            "model": model_id,
+            "messages": messages,
+            "stream": stream,
+            "api_key": api_key,
+            **kwargs,
+        }
+        if "base_url" in prov_cfg:
+            litellm_kwargs["api_base"] = prov_cfg["base_url"]
+
+        response = litellm.completion(**litellm_kwargs)
+
+        if stream:
+            return self._iter_stream(response)
+        return response.choices[0].message.content
 
     def list_providers(self) -> list[str]:
         """Return all configured provider names."""
         return list(self._config["providers"].keys())
 
     def list_models(self, provider: str) -> list[str]:
-        """Return official model names for a provider."""
+        """Return model aliases for a provider."""
         return list(self._get_provider_config(provider).get("models", {}).keys())
 
     def default_model(self, provider: str) -> str:
-        """Return the default model for a provider."""
+        """Return the default model alias for a provider."""
         return self._get_provider_config(provider).get("default_model", "")
 
     # ── Internal helpers ───────────────────────────────────────────────────────
@@ -211,7 +154,6 @@ class LLMConnector:
         models = prov_cfg.get("models", {})
         if model_name in models:
             return models[model_name]
-        # Pass through unknown names directly (e.g. newly released models not yet in config)
         return model_name
 
     def _get_api_key(self, provider: str, prov_cfg: dict) -> str:
@@ -227,16 +169,14 @@ class LLMConnector:
             )
         return key
 
-    def _get_client(self, provider: str, prov_cfg: dict):
-        if provider not in self._provider_cache:
-            api_key = self._get_api_key(provider, prov_cfg)
-            ptype = prov_cfg.get("type", "openai_compatible")
-            if ptype == "anthropic":
-                self._provider_cache[provider] = _AnthropicProvider(api_key)
-            else:
-                base_url = prov_cfg.get("base_url")
-                self._provider_cache[provider] = _OpenAIProvider(api_key, base_url)
-        return self._provider_cache[provider]
+    @staticmethod
+    def _iter_stream(response) -> Iterator[str]:
+        for chunk in response:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if delta.content:
+                yield delta.content
 
 
 # ── Module-level shortcuts ─────────────────────────────────────────────────────
@@ -264,6 +204,8 @@ def chat(
     return get_connector().chat(messages, provider=provider, model=model, stream=stream, **kwargs)
 
 
+# ── Streaming utilities ────────────────────────────────────────────────────────
+
 def strip_think_stream(chunks: Iterator[str]) -> Iterator[str]:
     """Remove <think>...</think> reasoning blocks from a streaming response.
 
@@ -271,30 +213,21 @@ def strip_think_stream(chunks: Iterator[str]) -> Iterator[str]:
     chain-of-thought wrapped in <think> tags before the final answer.
     """
     OPEN, CLOSE = "<think>", "</think>"
-    buf, in_think = "", False
+    buf, inside = "", False
     for chunk in chunks:
         buf += chunk
-        out = ""
         while True:
-            if in_think:
-                idx = buf.find(CLOSE)
-                if idx == -1:
-                    buf = buf[-(len(CLOSE) - 1):] if len(buf) >= len(CLOSE) else buf
-                    break
-                buf = buf[idx + len(CLOSE):].lstrip("\n")
-                in_think = False
-            else:
-                idx = buf.find(OPEN)
-                if idx == -1:
-                    tail = len(OPEN) - 1
-                    if len(buf) > tail:
-                        out += buf[:-tail]
-                        buf = buf[-tail:]
-                    break
-                out += buf[:idx]
-                buf = buf[idx + len(OPEN):]
-                in_think = True
-        if out:
-            yield out
-    if buf and not in_think:
+            tag = CLOSE if inside else OPEN
+            idx = buf.find(tag)
+            if idx == -1:
+                safe = max(0, len(buf) - len(tag) + 1)
+                if not inside and safe > 0:
+                    yield buf[:safe]
+                buf = buf[safe:]
+                break
+            if not inside:
+                yield buf[:idx]
+            buf = buf[idx + len(tag):]
+            inside = not inside
+    if buf and not inside:
         yield buf
