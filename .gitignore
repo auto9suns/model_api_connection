@@ -9,3 +9,5 @@ venv/
 .eggs/
 dist/
 build/
+.claude/
+.omc/

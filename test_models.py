@@ -12,6 +12,7 @@ Usage:
 """
 
 import argparse
+import asyncio
 import os
 import sys
 import time
@@ -141,6 +142,16 @@ def main():
         models_filter=args.model,
         test_all=args.test_all,
     )
+
+    # Close the asyncio event loop created internally by litellm/httpx to
+    # suppress the "Invalid file descriptor: -1" cleanup error on exit.
+    try:
+        loop = asyncio.get_event_loop()
+        if not loop.is_closed():
+            loop.close()
+    except Exception:  # nosec B110
+        pass
+
     sys.exit(0 if ok else 1)
 
 
