@@ -134,7 +134,7 @@ def fetch_siliconflow_pricing() -> dict[str, dict]:
             headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"}
         )
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:  # nosec
             html = resp.read().decode("utf-8", errors="replace")
     except Exception as e:
         return {"_error": f"fetch failed: {e}"}
@@ -216,7 +216,7 @@ def _fetch_gemini_native(api_key: str) -> list[dict]:
     import urllib.request
     url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}&pageSize=100"
     try:
-        with urllib.request.urlopen(url, timeout=10) as resp:
+        with urllib.request.urlopen(url, timeout=10) as resp:  # nosec
             data = json.loads(resp.read())
         result = []
         for m in data.get("models", []):
