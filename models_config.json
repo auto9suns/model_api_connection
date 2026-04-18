@@ -58,6 +58,7 @@
       "models": {
         "Claude-Opus-4.5":   "poe/Claude-Opus-4.5",
         "Claude-Sonnet-4.5": "poe/Claude-Sonnet-4.5",
+        "Claude-Haiku-4.5":  "poe/Claude-Haiku-4.5",
         "Gemini-3-Pro":      "poe/Gemini-3-Pro",
         "GPT-4o":            "poe/GPT-4o",
         "Grok-4":            "poe/Grok-4",
