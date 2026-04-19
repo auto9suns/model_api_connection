@@ -1,40 +1,40 @@
-# Model API Connection - 1Password Key Sync Redesign
+# Model API Connection — 1Password 密钥同步改造
 
-**Date:** 2026-04-19
-**Status:** Approved (brainstorm phase)
-**Owner:** xuche
+**日期**：2026-04-19
+**状态**：已 approve（brainstorm 阶段）
+**负责人**：xuche
 
 ---
 
-## 1. Problem
+## 1. 问题
 
-Model API Connection (`~/workspace/model_api_connection`) is meant to be the single LLM gateway for all local projects, but the current setup has three unresolved issues:
+Model API Connection（`~/workspace/model_api_connection`）定位是所有本地项目的统一 LLM 网关，但当前实现有三个未解决的问题：
 
-1. **Keys are not portable.** `python-dotenv` loads `.env` from the caller's CWD, not from this repo. Consumer projects that `pip install -e` the connector do not automatically inherit keys unless each project duplicates `.env` or the user happens to run from this directory.
-2. **No unattended (cron / launchd) support.** The user plans to run scheduled LLM jobs on a Mac Mini. The current flow depends on an ambient shell environment that cron does not provide.
-3. **Keys live only in scattered files.** No human-readable source of truth. Rotating a key means editing N files across N machines; there is no UI to look up "what is my current OpenAI key?".
+1. **密钥不具备可移植性**。`python-dotenv` 从调用方的 CWD 加载 `.env`，不是从本仓库。其他项目 `pip install -e` 本 connector 后，除非每个项目各复制一份 `.env`、或者用户恰好在本仓库目录下运行，否则拿不到密钥。
+2. **不支持无人值守（cron / launchd）场景**。用户计划在 Mac Mini 上跑定时 LLM 任务，当前流程依赖的 shell 环境在 cron 里并不存在。
+3. **密钥散落、缺可读真相源**。人肉查看/修改密钥没有统一入口——轮换一个 key 要在 N 台机器改 N 个文件，没有 UI 可以回答"我当前的 OpenAI key 是哪个？"。
 
-Additional context: the user owns 3+ personal Macs plus a work Mac Air, with a Mac Mini being deployed as a home server. All need the same keys. The user has just subscribed to 1Password.
+额外背景：用户手头有 3+ 台个人 Mac、1 台工作用 Mac Air，以及即将上线的 Mac Mini（作为家用常驻服务器），所有机器共用同一套密钥。用户刚订阅了 1Password。
 
-## 2. Goals
+## 2. 目标
 
-- **Single source of truth for keys** that is human-browsable (1Password UI).
-- **Zero-friction consumption** for Python projects: `from model_connector import chat` just works, regardless of CWD.
-- **Cron / launchd compatible**: scheduled jobs do not require interactive unlock.
-- **Cross-machine**: new Mac can be onboarded in under 10 minutes.
-- **Safe defaults**: keys never committed to git, local files `chmod 600`.
+- **密钥有单一真相源**，且人肉可浏览（1Password UI）。
+- **Python 项目零摩擦调用**：`from model_connector import chat` 直接能用，和 CWD 无关。
+- **兼容 cron / launchd**：定时任务不需要任何交互解锁。
+- **跨机器**：新 Mac 上线 10 分钟内搞定。
+- **默认安全**：密钥绝不进 git；本地文件统一 `chmod 600`。
 
-## 3. Non-Goals
+## 3. 不做的事（Non-Goals）
 
-- Pluggable key backends (env var / Keychain / 1P / Vault all in one connector) — YAGNI.
-- 1Password Connect self-hosted server — overkill for personal use.
-- 1Password Service Accounts (requires 1P Business subscription) — the local-cache pattern gives us the same end result without the cost.
-- Automatic key rotation schedule — manual is fine, rotation frequency is low.
-- Encrypted local cache (age / gpg around `keys.env`) — FileVault + `chmod 600` is sufficient; an additional encryption layer would need a local private key anyway, adding complexity with no real security gain.
-- Personal-profile / user-context injection into prompts — tracked as a separate concern, handled via `~/.claude/CLAUDE.md` imports.
-- Shell CLI (`llm chat ...`) — deferred until a non-Python consumer actually needs it.
+- 做可插拔 key backend（env / Keychain / 1P / Vault 一锅烩）—— YAGNI。
+- 自建 1Password Connect 服务——个人场景过度设计。
+- 用 1Password Service Account（需要 1P Business 订阅）——本地缓存方案能达到同样效果，省订阅费。
+- 自动轮换调度——手动足够，轮换频率本来就低。
+- 给本地缓存再加一层加密（age / gpg 套在 `keys.env` 外）—— FileVault + `chmod 600` 已足够；再套加密还得存私钥，增加复杂度而安全收益几乎为零。
+- 把个人档案 / 用户上下文注入到 prompt——独立议题，通过 `~/.claude/CLAUDE.md` 的 `@` 导入机制单独处理。
+- Shell CLI（`llm chat ...`）—— 等真有非 Python 消费方时再加。
 
-## 4. Architecture
+## 4. 架构
 
 ```
 +-----------------------------------------+
@@ -46,7 +46,7 @@ Additional context: the user owns 3+ personal Macs plus a work Mac Air, with a M
 |  - Poe                                  |
 +-----------------------------------------+
                  |
-                 | op read  (on demand: bootstrap / rotation)
+                 | op read（按需触发：首次 / 轮换）
                  v
 +-----------------------------------------+
 |  ~/.config/llm/keys.env (chmod 600)     |
@@ -55,57 +55,57 @@ Additional context: the user owns 3+ personal Macs plus a work Mac Air, with a M
 |  ...                                    |
 +-----------------------------------------+
                  |
-                 | load_dotenv (fixed path, CWD-independent)
+                 | load_dotenv（固定路径，与 CWD 无关）
                  v
 +-----------------------------------------+
-|  Consumer code                          |
+|  消费侧                                  |
 |  - from model_connector import chat     |
-|  - cron scripts                         |
+|  - cron 脚本                             |
 +-----------------------------------------+
 ```
 
-### Key design principles
+### 核心设计原则
 
-- **1Password is the human source of truth.** All lookups, edits, and rotations happen in the 1P UI.
-- **`~/.config/llm/keys.env` is the program source of truth.** The connector only reads this file (plus explicit overrides); it never talks to 1P directly at call time.
-- **`llm-sync-keys` is the bridge.** A small command that reads 1Password via `op` and writes the cache. Run on first setup, on key rotation, and on new machine onboarding — nothing else.
-- **Daily calls do not touch 1Password.** Cron jobs, interactive Python, and tests all read the cache file only.
+- **1Password 是人肉真相源**：查看、编辑、轮换全部在 1P UI 里完成。
+- **`~/.config/llm/keys.env` 是程序真相源**：connector 只读这个文件（可被显式参数覆盖），调用时从不碰 1P。
+- **`llm-sync-keys` 是桥**：一个小命令，调 `op` 读 1P、写本地缓存。只在首次搭建、密钥轮换、新机器接入时跑，其他时候用不到。
+- **日常调用从不访问 1P**：cron、交互式 Python、测试都只读本地缓存。
 
-## 5. Components
+## 5. 组件
 
-### 5.1 1Password Vault Structure
+### 5.1 1Password Vault 结构
 
-User manually creates (already done):
+用户已手动创建：
 
-- Vault name: `llmkeys`
-- Items (each with a `credential` field holding the API key):
+- Vault 名：`llmkeys`
+- 条目（每条含一个 `credential` 字段，内容是 API key）：
   - `OpenAI`
   - `Anthropic`
   - `Gemini`
   - `SiliconFlow`
   - `Poe`
 
-Item type: **API Credential** (1P built-in type). The key itself is stored in the field exposed as `op://llmkeys/<item>/credential`.
+条目类型用 **API Credential**（1P 内置类型）。密钥通过 `op://llmkeys/<item>/credential` 引用。
 
-### 5.2 New files
+### 5.2 新增文件
 
-| File | Purpose | Approx. size |
-|------|---------|--------------|
-| `key_sync.py` | `llm-sync-keys` command — reads 1P via `op`, writes `keys.env` | ~80 lines |
-| `paths.py` | Constants: `KEYS_ENV_PATH = Path.home() / ".config/llm/keys.env"` | ~20 lines |
-| `tests/test_key_sync.py` | Unit tests for sync (mock `op`) | ~100 lines |
+| 文件 | 作用 | 预估行数 |
+|------|------|---------|
+| `key_sync.py` | `llm-sync-keys` 命令 —— 读 1P，写 `keys.env` | ~80 |
+| `paths.py` | 路径常量：`KEYS_ENV_PATH = Path.home() / ".config/llm/keys.env"` | ~20 |
+| `tests/test_key_sync.py` | sync 的单元测试（mock `op`） | ~100 |
 
-### 5.3 Modified files
+### 5.3 修改文件
 
 **`model_connector.py`**
-- Load `~/.config/llm/keys.env` automatically at module import time (override-capable).
-- Fix singleton bug: `get_connector(**kwargs)` currently rebuilds the singleton every time kwargs are passed because of `_default_connector is None or kwargs`. New behavior: cache per kwargs-hash, or rebuild only when kwargs differ.
-- Add `raw: bool = False` parameter to `chat()` — when true, return the full litellm response object instead of just `.choices[0].message.content`. Needed for tool-use handling (the current code swallows `tool_calls`).
-- Improved error message when keys.env is missing: point at `llm-sync-keys`.
-- Public API (`__all__`) stays unchanged; existing callers keep working.
+- 模块导入时自动加载 `~/.config/llm/keys.env`（可被显式参数覆盖）。
+- 修复 singleton bug：`get_connector(**kwargs)` 当前只要传了 kwargs 就重建单例（原因是 `_default_connector is None or kwargs` 的逻辑错）。新行为：按 kwargs 哈希缓存，或只在 kwargs 变化时重建。
+- 新增 `chat()` 的 `raw: bool = False` 参数 —— 为 True 时返回完整 litellm response 对象，而不是只返回 `.choices[0].message.content`。用于 tool-use 场景（当前代码丢掉了 `tool_calls`）。
+- 改进 keys.env 缺失时的错误信息：提示去跑 `llm-sync-keys`。
+- 公共 API（`__all__`）保持不变，现有调用方无需改动。
 
 **`models_config.json`**
-- Add per-provider `op_reference` field:
+- 每个 provider 加 `op_reference` 字段：
   ```json
   "openai": {
     "api_key_env": "OPENAI_API_KEY",
@@ -114,29 +114,29 @@ Item type: **API Credential** (1P built-in type). The key itself is stored in th
     "models": { ... }
   }
   ```
-- `key_sync.py` reads this field to know what to fetch from 1P.
-- If a provider omits `op_reference`, `llm-sync-keys` skips it (allows mixed-source setups).
+- `key_sync.py` 读这个字段决定从 1P 拉哪条。
+- provider 如果没配 `op_reference`，`llm-sync-keys` 跳过它（允许混源配置）。
 
 **`pyproject.toml`**
-- Add console script:
+- 增加 console script：
   ```toml
   [project.scripts]
   llm-sync-keys = "key_sync:main"
   ```
-- Keep existing `py-modules` and optional-deps sections.
+- 保留现有 `py-modules` 和 optional-deps 配置。
 
 **`README.md`**
-- Replace `.env` setup section with the 1Password + `llm-sync-keys` flow.
-- Switch install guidance from `pip install -e .` to `uv add --editable <path>` (keep a pip fallback line for legacy).
-- Add a new "Bootstrapping a new Mac" mini-section listing the 5-minute checklist.
+- 把 `.env` 配置章节替换成 1Password + `llm-sync-keys` 的新流程。
+- 安装说明从 `pip install -e .` 改成 `uv add --editable <path>`（保留一行 pip 兜底说明）。
+- 新增"新 Mac 接入"小节，给出 5 分钟 checklist。
 
-**`.env.example`** — delete. Its role is superseded by `llmkeys` in 1P plus `llm-sync-keys --help`.
+**`.env.example`** —— 删除。被 1P `llmkeys` vault + `llm-sync-keys --help` 替代。
 
-### 5.4 `llm-sync-keys` behavior
+### 5.4 `llm-sync-keys` 行为
 
 ```
 $ llm-sync-keys
-[1Password] Authenticating...   (Touch ID prompt if needed)
+[1Password] Authenticating...   (首次/session 过期会弹 Touch ID)
 - OpenAI        op://llmkeys/OpenAI/credential         -> OPENAI_API_KEY
 - Anthropic     op://llmkeys/Anthropic/credential      -> ANTHROPIC_API_KEY
 - Gemini        op://llmkeys/Gemini/credential         -> GEMINI_API_KEY
@@ -146,127 +146,127 @@ $ llm-sync-keys
 Wrote 5 keys to ~/.config/llm/keys.env (chmod 600).
 
 $ llm-sync-keys --dry-run
-(prints what would be fetched, does not call op or write file)
+（打印将要拉的条目，不调 op，不写文件）
 
 $ llm-sync-keys --provider openai
-(fetches only one provider, useful after rotating a single key)
+（只拉一个 provider，用于单条轮换）
 ```
 
-Implementation notes:
-- Invoke `op` as a subprocess (`subprocess.run(["op", "read", ref], capture_output=True, text=True)`).
-- On missing `op`: print install hint (`brew install 1password-cli`), exit 1.
-- On unauthenticated `op` (error text contains "not signed in"): print the "enable CLI integration" hint with link, exit 1.
-- On any failed item: print which one failed and continue with the rest; exit non-zero at the end if any failed.
-- Write to a temp file then atomic-rename to the final path, so a failed sync never leaves a half-written file.
-- Always `chmod 600` on the final file.
-- `~/.config/llm/` is created if absent, with `0700` permissions.
+实现要点：
+- 用 subprocess 调 `op`：`subprocess.run(["op", "read", ref], capture_output=True, text=True)`。
+- `op` 未安装：提示 `brew install 1password-cli`，exit 1。
+- `op` 未认证（错误文本含 "not signed in"）：提示去 1P App 勾 "Integrate with 1Password CLI"，exit 1。
+- 单条失败：打印哪条失败，继续跑剩下的；整体有任何失败就以非零状态退出。
+- 先写临时文件再原子 rename，保证失败时不会留下半截文件。
+- 最终文件统一 `chmod 600`。
+- `~/.config/llm/` 不存在就创建，权限 `0700`。
 
-## 6. Data Flow
+## 6. 数据流
 
-**Scenario A: Interactive Python in any project**
+**场景 A：任意项目里跑 Python**
 ```
 $ cd ~/workspace/some-other-project
 $ python -c "from model_connector import chat; print(chat('hi', provider='openai'))"
--> model_connector at import time: load_dotenv("~/.config/llm/keys.env")
--> chat() resolves api_key from env (now populated), calls litellm, returns
+-> model_connector import 时执行 load_dotenv("~/.config/llm/keys.env")
+-> chat() 从环境变量里取 api_key（此时已被注入）、调 litellm、返回
 ```
 
-**Scenario B: cron / launchd**
+**场景 B：cron / launchd**
 ```
-(launchd) run /usr/bin/python3 ~/scripts/daily-summarize.py
--> script imports model_connector
--> same load_dotenv, same path, no user interaction
--> runs to completion
-```
-
-**Scenario C: Key rotation**
-```
-1. Rotate key at provider dashboard (e.g., OpenAI Settings -> API keys)
-2. Paste new key into 1P item "llmkeys/OpenAI"
-3. On each active Mac:  llm-sync-keys --provider openai
-4. Next call uses new key automatically
+(launchd) 跑 /usr/bin/python3 ~/scripts/daily-summarize.py
+-> 脚本 import model_connector
+-> 同样 load_dotenv、同样路径，无需人工交互
+-> 跑完退出
 ```
 
-**Scenario D: New Mac onboarding**
+**场景 C：密钥轮换**
 ```
-1. Install: brew install 1password 1password-cli uv
-2. Sign in to 1P app; enable Settings -> Developer -> Integrate with 1Password CLI
-3. Clone the workspace if needed, or `uv add --editable` from an existing path
-4. Run: llm-sync-keys          (Touch ID, fetches all)
-5. Verify: python -c "from model_connector import chat; print(chat('ping', provider='openai'))"
+1. 在 provider 的后台（比如 OpenAI Settings -> API keys）轮换 key
+2. 把新 key 粘贴到 1P 条目 "llmkeys/OpenAI"
+3. 在每台活跃 Mac 上：llm-sync-keys --provider openai
+4. 下一次调用自动用新 key
 ```
 
-## 7. Error Handling
+**场景 D：新 Mac 接入**
+```
+1. 装软件：brew install 1password 1password-cli uv
+2. 登录 1P App；打开 Settings -> Developer -> 勾 "Integrate with 1Password CLI"
+3. 有需要就 clone workspace，或在已有路径上 `uv add --editable`
+4. 跑：llm-sync-keys         （Touch ID，拉全部条目）
+5. 验证：python -c "from model_connector import chat; print(chat('ping', provider='openai'))"
+```
 
-| Situation | Behavior |
-|-----------|----------|
-| `~/.config/llm/keys.env` absent at connector init | Do not raise yet; let `chat()` hit the existing "API key not found" path, but with an amended message: "... or run `llm-sync-keys` to populate cache." |
-| `keys.env` present but missing a specific key | Same as current: clear error naming the missing env var. |
-| `op` CLI not installed | `llm-sync-keys` prints `brew install 1password-cli`, exits 1. |
-| `op` CLI not authenticated | `llm-sync-keys` prints the enable-CLI-integration steps, exits 1. |
-| `op read` fails for one item | Log, skip, continue; exit non-zero at end. |
-| litellm API call fails | Pass through (no new swallowing). |
+## 7. 错误处理
 
-## 8. Testing
+| 场景 | 行为 |
+|------|------|
+| `~/.config/llm/keys.env` 不存在，connector 初始化时 | 不立即抛异常；让 `chat()` 走现有的"API key not found"路径，但信息增加一句："... or run `llm-sync-keys` to populate cache." |
+| `keys.env` 存在但某个 key 缺失 | 同当前：明确指出缺少哪个环境变量。 |
+| `op` CLI 未装 | `llm-sync-keys` 提示 `brew install 1password-cli`，exit 1。 |
+| `op` CLI 未认证 | `llm-sync-keys` 提示启用 CLI integration 的步骤，exit 1。 |
+| 单条 `op read` 失败 | 记录、跳过、继续其他条目；最终以非零状态退出。 |
+| litellm API 调用失败 | 原样透传异常，不吞。 |
 
-- **Unit tests (`tests/test_key_sync.py`)**: mock `subprocess.run` to simulate various `op` behaviors — success, missing binary, unauthenticated, partial failure. Verify the output file is written with mode `0600` and atomic rename is used.
-- **Existing `tests/` stays green**: the integration tests only require the relevant `*_API_KEY` env vars to be set; they do not care whether the value came from `keys.env` or a real shell env.
-- **Manual acceptance check on one Mac**:
-  1. Populate 1P vault with placeholder test keys
-  2. Run `llm-sync-keys`
-  3. Confirm `~/.config/llm/keys.env` exists, has `0600`, contains the expected variables
-  4. Run `python -c "from model_connector import chat; print(chat('ping', provider='openai'))"` from an unrelated CWD
-  5. Rotate one key in 1P, rerun `llm-sync-keys --provider openai`, confirm updated
+## 8. 测试
 
-## 9. Multi-Project Consumption Protocol
+- **单元测试（`tests/test_key_sync.py`）**：mock `subprocess.run` 模拟 `op` 的各种行为——成功、命令不存在、未认证、部分失败。校验输出文件权限是 `0600` 且用了原子 rename。
+- **现有 `tests/` 保持通过**：集成测试只要求相应的 `*_API_KEY` 环境变量存在；它们不关心 value 来自 `keys.env` 还是 shell env。
+- **在一台 Mac 上手动验收**：
+  1. 在 1P vault 里建好占位测试 key
+  2. 跑 `llm-sync-keys`
+  3. 确认 `~/.config/llm/keys.env` 存在、权限 `0600`、包含预期变量
+  4. 在一个无关 CWD 下跑 `python -c "from model_connector import chat; print(chat('ping', provider='openai'))"`
+  5. 在 1P 里改一个 key，跑 `llm-sync-keys --provider openai`，确认已刷新
 
-Consumer projects do exactly two things:
+## 9. 多项目接入协议
 
-**Install (once):**
+消费方项目**只做两件事**：
+
+**一次性安装：**
 ```
 uv add --editable ~/workspace/model_api_connection
 ```
 
-**Use:**
+**使用：**
 ```python
 from model_connector import chat
-response = chat("hello", provider="openai")
+response = chat("你好", provider="openai")
 ```
 
-No `.env`, no environment setup, no PATH changes, no key duplication.
+不配 `.env`、不改环境变量、不改 PATH、不复制密钥。
 
-Each consumer project's `CLAUDE.md` gets a short "LLM Calls" section (copy-paste template provided in `model_api_connection/README.md`) so that any Claude / agent working in that project knows the import pattern immediately.
+每个消费项目的 `CLAUDE.md` 里加一段"LLM 调用"小节（copy-paste 模板放在 `model_api_connection/README.md`），任何在该项目工作的 Claude / agent 都能立刻知道 import 姿势。
 
-## 10. Migration Plan
+## 10. 迁移计划
 
-Order matters because consumer projects must not break mid-migration.
+顺序有讲究——保证迁移过程中消费方项目不被打断。
 
-1. Populate 1Password `llmkeys` vault with all 5 current keys (user action, done outside this project).
-2. Implement `paths.py`, `key_sync.py`, `tests/test_key_sync.py`, update `pyproject.toml`. Commit.
-3. Add `op_reference` to `models_config.json`. Commit.
-4. Update `model_connector.py`: auto-load from fixed path, fix singleton bug, add `raw=True`, improved errors. Commit.
-5. Run `llm-sync-keys` on this Mac. Delete the old in-repo `.env` only after confirming the cache works.
-6. Update `README.md` and remove `.env.example`. Commit.
-7. On each other Mac: bootstrap flow (Scenario D above).
-8. For each consumer project: `uv add --editable ...`, remove any local `.env` duplication, verify.
+1. 用户在 1P `llmkeys` vault 里填好 5 条现有 key（本项目之外的操作，已完成）。
+2. 实现 `paths.py`、`key_sync.py`、`tests/test_key_sync.py`，更新 `pyproject.toml`。提交。
+3. 在 `models_config.json` 加 `op_reference`。提交。
+4. 更新 `model_connector.py`：固定路径自动加载、修 singleton bug、加 `raw=True`、改进错误信息。提交。
+5. 在本 Mac 跑 `llm-sync-keys`。确认缓存工作正常后，删仓库里旧的 `.env`。
+6. 更新 `README.md`，删除 `.env.example`。提交。
+7. 在其他 Mac 上依次按场景 D 的 bootstrap 流程操作。
+8. 每个消费方项目：`uv add --editable ...`，删掉本地 `.env` 的重复配置，验证。
 
-## 11. Acceptance Criteria
+## 11. 验收标准
 
-- From any directory on this Mac, `python -c "from model_connector import chat; print(chat('ping', provider='openai'))"` succeeds without environment setup.
-- `launchctl` can run a Python script that calls `chat(...)` and completes without interactive input.
-- Deleting `~/.config/llm/keys.env` breaks calls; running `llm-sync-keys` restores them.
-- `~/.config/llm/keys.env` has mode `0600` after sync.
-- No API keys in the model_api_connection git history, working tree, or any committed file.
-- `tests/` passes.
+- 在本 Mac 任意目录下跑 `python -c "from model_connector import chat; print(chat('ping', provider='openai'))"`，无需任何环境准备即可成功。
+- `launchctl` 能跑一个调 `chat(...)` 的 Python 脚本，无需人工交互。
+- 删掉 `~/.config/llm/keys.env` 会让调用失败；跑 `llm-sync-keys` 能恢复。
+- `~/.config/llm/keys.env` sync 之后权限是 `0600`。
+- model_api_connection 的 git 历史、工作树、任何提交文件里都没有 API 密钥。
+- `tests/` 全部通过。
 
-## 12. Open Questions
+## 12. 待定问题
 
-- None blocking. Revisit later:
-  - Should `llm-sync-keys` offer a `--watch` mode that re-runs on a schedule? (Probably not — rotations are rare.)
-  - Should we add a "last rotated on" metadata line to `keys.env`? (Nice-to-have, not now.)
-  - Should consumer projects pin to a specific commit of model_api_connection, or stay on `main`? (Default: editable install from `main` for personal flexibility.)
+- 无阻塞项。回头可能再看：
+  - `llm-sync-keys` 要不要支持 `--watch` 定时重跑？（大概率不用，轮换很少见。）
+  - 要不要给 `keys.env` 加一行"上次轮换时间"元数据？（锦上添花，暂缓。）
+  - 消费方项目要不要锁 model_api_connection 的某个 commit，还是跟 `main`？（默认跟 `main` 的 editable install，个人场景灵活为主。）
 
-## 13. Out of Scope (Tracked Elsewhere)
+## 13. 范围外（另行处理）
 
-- Personal profile injection (devices, role, work context) into every LLM call — handled via Claude Code's `~/.claude/CLAUDE.md` `@` imports, separate workstream.
-- Claude Code subscription token reuse for scheduled LLM jobs — flagged in CLAUDE.md; revisit per job.
+- 个人档案注入（设备清单、身份、工作上下文）——通过 Claude Code 的 `~/.claude/CLAUDE.md` `@` 导入，独立议题。
+- Claude Code 订阅 token 在定时任务里复用的问题——CLAUDE.md 里已标记，每个任务单独评估。
