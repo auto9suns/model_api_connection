@@ -13,9 +13,9 @@ import litellm
 
 def _usage_dir() -> Path:
     raw = os.environ.get("LLM_USAGE_DIR")
-    if raw:
-        return Path(raw)
-    return Path.home() / "Library/Mobile Documents/iCloud~md~obsidian/Documents/llm-usage"
+    if not raw:
+        raise EnvironmentError("LLM_USAGE_DIR is not set. Add it to ~/.zshenv or the LaunchAgent plist.")
+    return Path(raw)
 
 
 def _usage_file() -> Path:
