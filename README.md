@@ -299,6 +299,10 @@ uri = upload_video("video.mp4", api_key="AIza...")
 
 ### 启用
 
+`import model_connector` 时自动注册（零侵入）。无需手动调用。
+
+也可显式调用（幂等）：
+
 ```python
 import usage_log
 usage_log.register()  # 幂等，可重复调用
