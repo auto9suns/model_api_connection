@@ -22,7 +22,8 @@ def _write_record(record: dict) -> None:
     target = _usage_file()
     target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     line = json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n"
+    existed = target.exists()
     with open(target, "a", encoding="utf-8") as f:
         f.write(line)
-    if (target.stat().st_mode & 0o777) != 0o600:
+    if not existed:
         target.chmod(0o600)

@@ -12,37 +12,27 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import usage_log
+
 
 def test_usage_dir_default(monkeypatch):
     monkeypatch.delenv("LLM_USAGE_DIR", raising=False)
-    import importlib
-    import usage_log
-    importlib.reload(usage_log)
     expected = Path.home() / "Library/Mobile Documents/iCloud~md~obsidian/Documents/llm-usage"
     assert usage_log._usage_dir() == expected
 
 
 def test_usage_dir_env_override(monkeypatch, tmp_path):
     monkeypatch.setenv("LLM_USAGE_DIR", str(tmp_path / "custom"))
-    import importlib
-    import usage_log
-    importlib.reload(usage_log)
     assert usage_log._usage_dir() == tmp_path / "custom"
 
 
 def test_usage_file_uses_hostname(monkeypatch, tmp_path):
     monkeypatch.setenv("LLM_USAGE_DIR", str(tmp_path))
-    import importlib
-    import usage_log
-    importlib.reload(usage_log)
     assert usage_log._usage_file() == tmp_path / f"{socket.gethostname()}.jsonl"
 
 
 def test_write_record_creates_file(monkeypatch, tmp_path):
     monkeypatch.setenv("LLM_USAGE_DIR", str(tmp_path))
-    import importlib
-    import usage_log
-    importlib.reload(usage_log)
 
     usage_log._write_record({"foo": "bar", "n": 1})
 
@@ -54,9 +44,6 @@ def test_write_record_creates_file(monkeypatch, tmp_path):
 
 def test_write_record_appends(monkeypatch, tmp_path):
     monkeypatch.setenv("LLM_USAGE_DIR", str(tmp_path))
-    import importlib
-    import usage_log
-    importlib.reload(usage_log)
 
     usage_log._write_record({"i": 1})
     usage_log._write_record({"i": 2})
@@ -68,9 +55,6 @@ def test_write_record_appends(monkeypatch, tmp_path):
 
 def test_write_record_file_permissions(monkeypatch, tmp_path):
     monkeypatch.setenv("LLM_USAGE_DIR", str(tmp_path))
-    import importlib
-    import usage_log
-    importlib.reload(usage_log)
 
     usage_log._write_record({"foo": "bar"})
 
@@ -81,9 +65,6 @@ def test_write_record_file_permissions(monkeypatch, tmp_path):
 def test_write_record_dir_permissions(monkeypatch, tmp_path):
     target = tmp_path / "nested" / "llm-usage"
     monkeypatch.setenv("LLM_USAGE_DIR", str(target))
-    import importlib
-    import usage_log
-    importlib.reload(usage_log)
 
     usage_log._write_record({"foo": "bar"})
 
@@ -93,9 +74,6 @@ def test_write_record_dir_permissions(monkeypatch, tmp_path):
 
 def test_write_record_unicode(monkeypatch, tmp_path):
     monkeypatch.setenv("LLM_USAGE_DIR", str(tmp_path))
-    import importlib
-    import usage_log
-    importlib.reload(usage_log)
 
     usage_log._write_record({"msg": "你好"})
 
