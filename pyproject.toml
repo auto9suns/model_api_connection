@@ -17,8 +17,12 @@ dev = [
     "pytest>=7.0",
 ]
 
+[project.scripts]
+llm-stats = "cli.llm_stats:main"
+
 [tool.setuptools]
-py-modules = ["model_connector", "video_connector", "gemini_uploader"]
+py-modules = ["model_connector", "video_connector", "gemini_uploader", "usage_log"]
+packages = ["cli"]
 
 [tool.setuptools.package-data]
 "*" = ["models_config.json"]
