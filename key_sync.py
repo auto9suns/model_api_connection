@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import tempfile
 from pathlib import Path
 
 
@@ -47,3 +49,25 @@ def fetch_key(op_reference: str) -> str:
     if result.returncode != 0:
         raise OpError(result.stderr.strip() or "op read failed")
     return result.stdout.strip()
+
+
+def write_keys_env(keys: dict[str, str], target: Path) -> None:
+    """Atomically write {env_var: value} pairs to target (mode 0600).
+
+    The parent directory is created with mode 0700 if needed.
+    """
+    target.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(target.parent, 0o700)
+
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=".keys.env.", dir=str(target.parent)
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            for env_var, value in keys.items():
+                f.write(f"{env_var}={value}\n")
+        os.chmod(tmp_name, 0o600)
+        os.replace(tmp_name, target)
+    except BaseException:
+        Path(tmp_name).unlink(missing_ok=True)
+        raise
