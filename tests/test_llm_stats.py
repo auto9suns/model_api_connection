@@ -178,6 +178,16 @@ def test_aggregate_handles_null_cost():
     assert result[0]["cost_usd"] is None  # all null → aggregate is null
 
 
+def test_aggregate_mixed_null_cost():
+    from cli import llm_stats
+    rows = [
+        _sample(provider="x", cost=0.01),
+        _sample(provider="x", cost=None),
+    ]
+    result = llm_stats._aggregate(rows, by=["provider"])
+    assert result[0]["cost_usd"] == pytest.approx(0.01)
+
+
 def test_aggregate_by_combined_keys():
     from cli import llm_stats
     rows = [
