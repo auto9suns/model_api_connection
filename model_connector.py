@@ -50,7 +50,7 @@ from paths import CONFIG_PATH
 try:
     from dotenv import load_dotenv
     if paths.KEYS_ENV_PATH.exists():
-        load_dotenv(paths.KEYS_ENV_PATH, override=False)
+        load_dotenv(paths.KEYS_ENV_PATH, override=True)
 except ImportError:
     pass
 
