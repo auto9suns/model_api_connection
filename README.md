@@ -294,13 +294,21 @@ uri = upload_video("video.mp4", api_key="AIza...")
 
 ---
 
-## LLM 用量日志
+## LLM 用量监控
 
 `usage_log.py` 通过 litellm callback 自动记录每次调用，写入 JSONL 文件。
 
-### 启用
+### 零侵入接入
 
-`import model_connector` 时自动注册（零侵入）。无需手动调用。
+消费方项目只需安装并导入，无需任何额外配置：
+
+```bash
+pip install -e /path/to/model_api_connection
+```
+
+```python
+from model_connector import chat  # 导入即自动注册，所有调用自动记录
+```
 
 也可显式调用（幂等）：
 
@@ -312,8 +320,14 @@ usage_log.register()  # 幂等，可重复调用
 调用后，所有经过 litellm 的请求（成功或失败）都会追加写入：
 
 ```
-$LLM_USAGE_DIR/<hostname>.jsonl   # 默认目录见下方环境变量
+~/Library/Mobile Documents/iCloud~md~obsidian/Documents/llm-usage/<hostname>.jsonl
 ```
+
+可通过 `LLM_USAGE_DIR` 环境变量覆盖默认目录。
+
+### iCloud 同步与多端聚合
+
+日志目录默认位于 iCloud 同步路径，文件自动跨设备同步。每台机器写入自己的 `<hostname>.jsonl`，在任意一台机器上执行 `llm-stats` 即可看到所有已同步设备的记录。
 
 ### 环境变量
 
@@ -323,6 +337,29 @@ $LLM_USAGE_DIR/<hostname>.jsonl   # 默认目录见下方环境变量
 | `LLM_CALLER` | `sys.argv[0]` | 调用方标识（覆盖自动检测） |
 | `LLM_LOG_PAYLOAD` | 未设置 | 设为 `1` 时记录完整 prompt 和 completion |
 
+### cron / launchd 署名（LLM_CALLER）
+
+无人值守任务无法自动识别调用方，建议显式设置 `LLM_CALLER`：
+
+```bash
+LLM_CALLER=daily-summary python ~/scripts/daily.py
+```
+
+事后可按 caller 聚合查询：
+
+```bash
+llm-stats --since 7d --by caller
+```
+
+### 临时记录 prompt/completion（LLM_LOG_PAYLOAD）
+
+调试时可临时开启完整内容记录：
+
+```bash
+LLM_LOG_PAYLOAD=1 python ~/scripts/repro.py
+llm-stats --tail 1 --raw | jq '.prompt, .completion'
+```
+
 ### 日志字段
 
 每行 JSON 包含：`ts`、`host`、`provider`、`model`、`caller_script`、`input_tokens`、`output_tokens`、`cost_usd`、`latency_ms`、`status`（`success`/`error`）、`error`、`request_id`、`stream`。
@@ -330,6 +367,29 @@ $LLM_USAGE_DIR/<hostname>.jsonl   # 默认目录见下方环境变量
 ### 异常隔离
 
 写日志失败时只向 stderr 打印警告，不影响主调用链。
+
+### llm-stats CLI
+
+`llm-stats` 为注册的命令行工具，安装后可直接使用：
+
+```bash
+llm-stats                                            # 最近 24h，按 provider 聚合
+llm-stats --since 1h --by caller                     # 最近 1h，按 caller 聚合
+llm-stats --since 7d --by host                       # 最近一周，按机器聚合
+llm-stats --filter provider=siliconflow --since 36h  # 排查异常 provider
+llm-stats --filter caller~runaway --raw              # 看具体调用
+llm-stats --tail 50                                  # 最近 50 条原始记录
+llm-stats --paths                                    # 打印日志目录与各文件状态
+```
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--since` | `24h` | 时间窗口：`1h` / `24h` / `7d` / `30m` / ISO 8601 |
+| `--by` | `provider` | group by 键，逗号分隔：`provider` / `model` / `caller` / `host` |
+| `--filter` | 无 | `key=val` 精确匹配 / `key~val` 子串，可多次指定 |
+| `--raw` | 关 | 输出原始 JSONL，便于管道给 `jq` |
+| `--tail` | 0 | 只看最近 N 条原始记录（按 ts 排序） |
+| `--paths` | 关 | 打印 `USAGE_DIR` 路径和各 `.jsonl` 文件行数/大小 |
 
 ### 查询 API（`cli/llm_stats.py`）
 
@@ -365,39 +425,16 @@ result = llm_stats._aggregate(rows, by=["provider", "host"])
 # -> [{"provider": "openai", "host": "mac1", "calls": 5, "input_tokens": 1200, ...}, ...]
 ```
 
-### llm-stats CLI
+### 消费方 CLAUDE.md 推荐模板
 
-`cli/llm_stats.py` 提供 `main(argv)` 入口，可直接作为命令行工具使用：
+在消费方项目的 `CLAUDE.md` 中加入以下片段，让 AI 助手知道如何处理 LLM 调用记录：
 
-```bash
-# 查看日志目录和各文件状态
-python -m cli.llm_stats --paths
-
-# 过去 24 小时按 provider 汇总（默认）
-python -m cli.llm_stats
-
-# 自定义时间窗口
-python -m cli.llm_stats --since 7d
-python -m cli.llm_stats --since 2026-04-19T00:00:00Z
-
-# 按多键 group by
-python -m cli.llm_stats --by provider,host
-
-# 过滤后输出原始 JSONL（便于 jq）
-python -m cli.llm_stats --filter provider=siliconflow --raw
-
-# 查看最近 N 条原始记录
-python -m cli.llm_stats --tail 20 --raw
 ```
-
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `--since` | `24h` | 时间窗口：`1h` / `24h` / `7d` / `30m` / ISO 8601 |
-| `--by` | `provider` | group by 键，逗号分隔：`provider` / `model` / `caller` / `host` |
-| `--filter` | 无 | `key=val` 精确匹配 / `key~val` 子串，可多次指定 |
-| `--raw` | 关 | 输出原始 JSONL，便于管道给 `jq` |
-| `--tail` | 0 | 只看最近 N 条原始记录（按 ts 排序） |
-| `--paths` | 关 | 打印 `USAGE_DIR` 路径和各 `.jsonl` 文件行数/大小 |
+## LLM 调用
+用 `from model_connector import chat`。所有调用自动记录到本机 iCloud 同步的
+`llm-usage/`，可在任意机器跑 `llm-stats` 查询。
+cron / 长期脚本请设 `LLM_CALLER=<task-name>` 便于事后追溯。
+```
 
 ---
 
