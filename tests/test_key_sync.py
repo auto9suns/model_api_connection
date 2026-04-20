@@ -1,12 +1,13 @@
 """Tests for key_sync module."""
 
 import json
+import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from key_sync import load_providers, fetch_key, OpError
+from key_sync import load_providers, fetch_key, OpError, write_keys_env
 
 
 def test_load_providers_returns_provider_with_op_reference(tmp_path):
@@ -93,11 +94,6 @@ def test_fetch_key_raises_oper_on_failure():
         with pytest.raises(OpError) as excinfo:
             fetch_key("op://llmkeys/Missing/credential")
         assert "error reading item" in str(excinfo.value)
-
-
-import os
-
-from key_sync import write_keys_env
 
 
 def test_write_keys_env_creates_file_with_mode_600(tmp_path):
