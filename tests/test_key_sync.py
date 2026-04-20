@@ -2,10 +2,11 @@
 
 import json
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from key_sync import load_providers
+from key_sync import load_providers, fetch_key, OpError
 
 
 def test_load_providers_returns_provider_with_op_reference(tmp_path):
@@ -67,3 +68,28 @@ def test_load_providers_filter_by_name(tmp_path):
     result = load_providers(config_path, only="openai")
 
     assert list(result.keys()) == ["openai"]
+
+
+def test_fetch_key_returns_stripped_stdout():
+    with patch("key_sync.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout="sk-12345\n", stderr=""
+        )
+        key = fetch_key("op://llmkeys/OpenAI/credential")
+        assert key == "sk-12345"
+        mock_run.assert_called_once_with(
+            ["op", "read", "op://llmkeys/OpenAI/credential"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+
+def test_fetch_key_raises_oper_on_failure():
+    with patch("key_sync.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(
+            returncode=1, stdout="", stderr="error reading item"
+        )
+        with pytest.raises(OpError) as excinfo:
+            fetch_key("op://llmkeys/Missing/credential")
+        assert "error reading item" in str(excinfo.value)

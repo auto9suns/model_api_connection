@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
+
+
+class OpError(RuntimeError):
+    """Raised when `op` CLI returns a non-zero exit code."""
 
 
 def load_providers(
@@ -24,3 +29,21 @@ def load_providers(
         if ref and env_var:
             result[name] = (ref, env_var)
     return result
+
+
+def fetch_key(op_reference: str) -> str:
+    """Fetch a single credential from 1Password via the `op` CLI.
+
+    Requires `op` CLI to be installed and in PATH.
+    Raises OpError if `op` exits non-zero.
+    """
+    # nosec B607: `op` is a standard CLI tool required in PATH
+    result = subprocess.run(
+        ["op", "read", op_reference],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise OpError(result.stderr.strip() or "op read failed")
+    return result.stdout.strip()
