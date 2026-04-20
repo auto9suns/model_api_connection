@@ -58,7 +58,7 @@
     },
     "meai": {
       "api_key_env": "MEAI_API_KEY",
-      "op_reference": "op://llmkeys/MeAI/credential",
+      "op_reference": "op://llmkeys/Meai/credential",
       "base_url": "http://114.132.99.114:3000/v1",
       "default_model": "claude-sonnet-4-6",
       "models": {
