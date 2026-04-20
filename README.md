@@ -7,8 +7,10 @@
 ## 快速接入（其他项目）
 
 ```bash
-# 推荐：安装为可编辑包
-pip install -e /path/to/model_api_connection
+# 推荐：uv editable install
+uv add --editable ~/workspace/model_api_connection
+# 或 pip 兜底
+pip install -e ~/workspace/model_api_connection
 ```
 
 ```python
@@ -45,12 +47,13 @@ response = llm.chat("你好", provider="openai")
 
 ## 安装
 
-**1. 安装依赖**
+**1. 安装包（推荐 uv）**
 
 ```bash
-pip install -r requirements.txt
-# 或安装为包：
-pip install -e .
+# 在消费方项目根目录执行
+uv add --editable ~/workspace/model_api_connection
+# 或 pip 兜底
+pip install -e ~/workspace/model_api_connection
 ```
 
 **2. 配置 API key**
@@ -448,9 +451,9 @@ cron / 长期脚本请设 `LLM_CALLER=<task-name>` 便于事后追溯。
 
 `key_sync.py` 从 1Password 读取 API key，写入 `~/.config/llm/keys.env`（权限 600）。
 
-**前置条件：** 安装并登录 `op` CLI（`brew install 1password-cli`），在 1Password 应用 -> Settings -> Developer -> 开启 "Integrate with 1Password CLI"。
+**前置条件：** 安装并登录 `op` CLI（`brew install 1password-cli`），在 1Password 应用 -> Settings -> Developer -> 开启 "Integrate with 1Password CLI"。密钥真相源是 1Password vault `llmkeys`（每个 provider 一条 API Credential 条目）。
 
-在 `models_config.json` 的 provider 中添加 `op_reference` 字段后即可使用：
+在 `models_config.json` 的 provider 中添加 `op_reference`（如 `op://llmkeys/OpenAI/credential`）字段后即可使用：
 
 ```bash
 uv run python key_sync.py                        # 同步所有配置了 op_reference 的 provider
@@ -494,10 +497,12 @@ pytest tests/
 
 ## 在其他项目中使用
 
-### 推荐：pip install
+### 推荐：uv editable install
 
 ```bash
-pip install -e /path/to/model_api_connection
+uv add --editable ~/workspace/model_api_connection
+# 或 pip 兜底
+pip install -e ~/workspace/model_api_connection
 ```
 
 然后直接 import：
@@ -521,7 +526,7 @@ from model_connector import chat
 ```markdown
 ## LLM API 调用
 
-本项目通过 model_api_connection 连接大模型（已 pip install -e 安装）。
+本项目通过 model_api_connection 连接大模型（已 `uv add --editable` 安装）。
 
 \```python
 from model_connector import chat, LLMConnector, strip_think_stream
