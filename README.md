@@ -36,6 +36,7 @@ response = llm.chat("你好", provider="openai")
 | `fetch_models.py` | CLI 工具：从 API 拉取最新模型列表 |
 | `_fetch_helpers.py` | fetch_models.py 的内部辅助模块 |
 | `usage_log.py` | LLM 调用日志底层：路径解析 + JSONL writer + caller 识别 + record builder + litellm callback 注册 |
+| `cli/llm_stats.py` | llm-stats CLI：跨机器 JSONL 日志合并读取（`_usage_dir` / `_iter_records`） |
 | `tests/` | 单元测试（`pytest tests/`） |
 | `.env.example` | API key 模板 |
 
