@@ -61,7 +61,7 @@ def write_keys_env(keys: dict[str, str], target: Path) -> None:
     The parent directory is created with mode 0700 if needed.
     """
     target.parent.mkdir(parents=True, exist_ok=True)
-    os.chmod(target.parent, 0o700)  # nosec B103 — intentionally restrictive: owner-only key cache dir
+    os.chmod(target.parent, 0o700)  # nosec B103  # nosemgrep: insecure-file-permissions — intentionally restrictive: owner-only key cache dir
 
     fd, tmp_name = tempfile.mkstemp(
         prefix=".keys.env.", dir=str(target.parent)
