@@ -61,7 +61,7 @@ pip install -e ~/workspace/model_api_connection
 推荐方式：通过 `llm-sync-keys` 从 1Password 同步到 `~/.config/llm/keys.env`（详见下方 CLI 工具章节）：
 
 ```bash
-llm-sync-keys          # 需安装并登录 op CLI
+uv run llm-sync-keys          # 需安装并登录 op CLI
 ```
 
 `model_connector` 在 import 时会自动加载 `~/.config/llm/keys.env`，shell 中已导出的同名变量优先级更高，不会被覆盖。
@@ -74,6 +74,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 export GEMINI_API_KEY=AIza...
 export SILICONFLOW_API_KEY=sf-...
 export POE_API_KEY=...
+export MEAI_API_KEY=...
 ```
 
 ---
@@ -208,6 +209,8 @@ for chunk in strip_think_stream(stream):
 | gemini | `gemini-2.5-flash` | `gemini/gemini-2.5-flash` |
 | siliconflow | `deepseek-v3` | `siliconflow/deepseek-ai/DeepSeek-V3` |
 | poe | `Claude-Sonnet-4.5` | `poe/Claude-Sonnet-4.5` |
+| meai | `claude-sonnet-4-6` | `openai/claude-sonnet-4-6` |
+| meai | `glm-5.1` | `openai/glm-5.1` |
 
 也可以直接传未在 config 中注册的模型 ID，会原样转发：
 
@@ -380,13 +383,13 @@ llm-stats --tail 1 --raw | jq '.prompt, .completion'
 `llm-stats` 为注册的命令行工具，安装后可直接使用：
 
 ```bash
-llm-stats                                            # 最近 24h，按 provider 聚合
-llm-stats --since 1h --by caller                     # 最近 1h，按 caller 聚合
-llm-stats --since 7d --by host                       # 最近一周，按机器聚合
-llm-stats --filter provider=siliconflow --since 36h  # 排查异常 provider
-llm-stats --filter caller~runaway --raw              # 看具体调用
-llm-stats --tail 50                                  # 最近 50 条原始记录
-llm-stats --paths                                    # 打印日志目录与各文件状态
+uv run llm-stats                                            # 最近 24h，按 provider 聚合
+uv run llm-stats --since 1h --by caller                     # 最近 1h，按 caller 聚合
+uv run llm-stats --since 7d --by host                       # 最近一周，按机器聚合
+uv run llm-stats --filter provider=siliconflow --since 36h  # 排查异常 provider
+uv run llm-stats --filter caller~runaway --raw              # 看具体调用
+uv run llm-stats --tail 50                                  # 最近 50 条原始记录
+uv run llm-stats --paths                                    # 打印日志目录与各文件状态
 ```
 
 | 参数 | 默认值 | 说明 |
@@ -456,9 +459,9 @@ cron / 长期脚本请设 `LLM_CALLER=<task-name>` 便于事后追溯。
 在 `models_config.json` 的 provider 中添加 `op_reference`（如 `op://llmkeys/OpenAI/credential`）字段后即可使用：
 
 ```bash
-llm-sync-keys                        # 同步所有配置了 op_reference 的 provider
-llm-sync-keys --provider openai      # 只同步 openai，保留其他 key 不变
-llm-sync-keys --dry-run              # 预览将要同步的内容，不实际执行
+uv run llm-sync-keys                        # 同步所有配置了 op_reference 的 provider
+uv run llm-sync-keys --provider openai      # 只同步 openai，保留其他 key 不变
+uv run llm-sync-keys --dry-run              # 预览将要同步的内容，不实际执行
 ```
 
 **同步语义：**
@@ -549,5 +552,5 @@ for chunk in strip_think_stream(chat("prompt", provider="siliconflow", model="de
 LLMConnector().list_models("openai")
 \```
 
-可用 provider: openai, anthropic, gemini, siliconflow, poe
+可用 provider: openai, anthropic, gemini, siliconflow, poe, meai
 ```
