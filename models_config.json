@@ -56,6 +56,19 @@
         "SenseVoiceSmall":                  "openai/FunAudioLLM/SenseVoiceSmall"
       }
     },
+    "meai": {
+      "api_key_env": "MEAI_API_KEY",
+      "op_reference": "op://llmkeys/Meai/credential",
+      "base_url": "http://114.132.99.114:3000/v1",
+      "default_model": "claude-sonnet-4-6",
+      "models": {
+        "glm-5":              "openai/glm-5",
+        "glm-5.1":            "openai/glm-5.1",
+        "claude-sonnet-4-6":  "openai/claude-sonnet-4-6",
+        "claude-opus-4-7":    "openai/claude-opus-4-7",
+        "gemini-3-flash":     "openai/gemini-3-flash"
+      }
+    },
     "poe": {
       "api_key_env": "POE_API_KEY",
       "op_reference": "op://llmkeys/Poe/credential",
