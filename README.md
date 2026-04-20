@@ -36,7 +36,7 @@ response = llm.chat("你好", provider="openai")
 | `fetch_models.py` | CLI 工具：从 API 拉取最新模型列表 |
 | `_fetch_helpers.py` | fetch_models.py 的内部辅助模块 |
 | `usage_log.py` | LLM 调用日志底层：路径解析 + JSONL writer + caller 识别 + record builder + litellm callback 注册 |
-| `cli/llm_stats.py` | llm-stats CLI：跨机器 JSONL 日志合并读取（`_usage_dir` / `_iter_records`） |
+| `cli/llm_stats.py` | llm-stats CLI：跨机器 JSONL 日志合并读取、时间过滤、字段过滤、多维聚合 |
 | `tests/` | 单元测试（`pytest tests/`） |
 | `.env.example` | API key 模板 |
 
@@ -330,6 +330,40 @@ $LLM_USAGE_DIR/<hostname>.jsonl   # 默认目录见下方环境变量
 ### 异常隔离
 
 写日志失败时只向 stderr 打印警告，不影响主调用链。
+
+### 查询 API（`cli/llm_stats.py`）
+
+`_parse_since(value, now=None)` — 解析时间窗口，支持相对格式（`1h` / `24h` / `7d` / `30m`）或 ISO 8601：
+
+```python
+from cli import llm_stats
+import datetime as dt
+
+cutoff = llm_stats._parse_since("24h")           # 过去 24 小时
+cutoff = llm_stats._parse_since("2026-04-19T00:00:00Z")  # 绝对时间
+```
+
+`_parse_filter(specs)` — 解析过滤条件列表，支持精确匹配（`=`）和子串匹配（`~`）：
+
+```python
+filters = llm_stats._parse_filter(["provider=openai", "caller~runaway.py"])
+# -> [("provider", "=", "openai"), ("caller", "~", "runaway.py")]
+```
+
+`_apply_since(rows, cutoff)` / `_apply_filters(rows, filters)` — 流式过滤（生成器）：
+
+```python
+rows = llm_stats._iter_records()
+rows = llm_stats._apply_since(rows, cutoff)
+rows = llm_stats._apply_filters(rows, filters)
+```
+
+`_aggregate(rows, by)` — 按多键 group by，汇总 calls / input_tokens / output_tokens / cost_usd（cost 全为 null 则聚合结果也为 null）：
+
+```python
+result = llm_stats._aggregate(rows, by=["provider", "host"])
+# -> [{"provider": "openai", "host": "mac1", "calls": 5, "input_tokens": 1200, ...}, ...]
+```
 
 ---
 
