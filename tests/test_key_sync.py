@@ -133,3 +133,79 @@ def test_write_keys_env_preserves_insertion_order(tmp_path):
     )
 
     assert target.read_text(encoding="utf-8") == "A_KEY=a\nB_KEY=b\nC_KEY=c\n"
+
+
+import shutil as real_shutil
+
+from key_sync import main
+
+
+@pytest.fixture
+def sample_config(tmp_path):
+    cfg = {
+        "providers": {
+            "openai": {
+                "api_key_env": "OPENAI_API_KEY",
+                "op_reference": "op://llmkeys/OpenAI/credential",
+            },
+            "anthropic": {
+                "api_key_env": "ANTHROPIC_API_KEY",
+                "op_reference": "op://llmkeys/Anthropic/credential",
+            },
+        }
+    }
+    config_path = tmp_path / "models_config.json"
+    config_path.write_text(json.dumps(cfg), encoding="utf-8")
+    return config_path
+
+
+def test_main_happy_path_writes_all_keys(sample_config, tmp_path, monkeypatch, capsys):
+    target = tmp_path / "keys.env"
+    monkeypatch.setattr("key_sync.CONFIG_PATH", sample_config)
+    monkeypatch.setattr("key_sync.KEYS_ENV_PATH", target)
+    monkeypatch.setattr("key_sync.shutil.which", lambda _name: "/usr/local/bin/op")
+
+    call_outputs = {
+        "op://llmkeys/OpenAI/credential": "sk-openai\n",
+        "op://llmkeys/Anthropic/credential": "sk-ant\n",
+    }
+
+    def fake_run(cmd, **_kwargs):
+        ref = cmd[-1]
+        return MagicMock(returncode=0, stdout=call_outputs[ref], stderr="")
+
+    monkeypatch.setattr("key_sync.subprocess.run", fake_run)
+
+    rc = main([])
+
+    assert rc == 0
+    contents = target.read_text(encoding="utf-8")
+    assert "OPENAI_API_KEY=sk-openai" in contents
+    assert "ANTHROPIC_API_KEY=sk-ant" in contents
+    out = capsys.readouterr().out
+    assert "Wrote 2 keys" in out
+
+
+def test_main_dry_run_does_not_call_op_or_write_file(
+    sample_config, tmp_path, monkeypatch, capsys
+):
+    target = tmp_path / "keys.env"
+    monkeypatch.setattr("key_sync.CONFIG_PATH", sample_config)
+    monkeypatch.setattr("key_sync.KEYS_ENV_PATH", target)
+
+    calls = []
+
+    def fake_run(cmd, **_kwargs):
+        calls.append(cmd)
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("key_sync.subprocess.run", fake_run)
+
+    rc = main(["--dry-run"])
+
+    assert rc == 0
+    assert calls == []
+    assert not target.exists()
+    out = capsys.readouterr().out
+    assert "op://llmkeys/OpenAI/credential" in out
+    assert "OPENAI_API_KEY" in out

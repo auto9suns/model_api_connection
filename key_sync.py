@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
+import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
+
+from paths import CONFIG_PATH, KEYS_ENV_PATH
 
 
 class OpError(RuntimeError):
@@ -39,8 +44,7 @@ def fetch_key(op_reference: str) -> str:
     Requires `op` CLI to be installed and in PATH.
     Raises OpError if `op` exits non-zero.
     """
-    # nosec B607: `op` is a standard CLI tool required in PATH
-    result = subprocess.run(
+    result = subprocess.run(  # nosec B607
         ["op", "read", op_reference],
         capture_output=True,
         text=True,
@@ -71,3 +75,58 @@ def write_keys_env(keys: dict[str, str], target: Path) -> None:
     except BaseException:
         Path(tmp_name).unlink(missing_ok=True)
         raise
+
+
+def _parse_args(argv: list[str] | None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="llm-sync-keys",
+        description="Sync LLM API keys from 1Password into ~/.config/llm/keys.env.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="List what would be fetched without calling op or writing the cache.",
+    )
+    parser.add_argument(
+        "--provider",
+        help="Only sync the named provider (matches a key in models_config.json).",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv)
+    providers = load_providers(CONFIG_PATH, only=args.provider)
+    if not providers:
+        print(
+            f"No provider with 'op_reference' configured"
+            + (f" for --provider {args.provider}" if args.provider else ""),
+            file=sys.stderr,
+        )
+        return 1
+
+    if args.dry_run:
+        for name, (ref, env_var) in providers.items():
+            print(f"- {name:12s} {ref} -> {env_var}")
+        return 0
+
+    if shutil.which("op") is None:
+        print(
+            "Error: 'op' CLI not installed.\n"
+            "Install: brew install 1password-cli",
+            file=sys.stderr,
+        )
+        return 1
+
+    keys: dict[str, str] = {}
+    for name, (ref, env_var) in providers.items():
+        keys[env_var] = fetch_key(ref)
+        print(f"  OK  {name:12s} -> {env_var}")
+
+    write_keys_env(keys, KEYS_ENV_PATH)
+    print(f"\nWrote {len(keys)} keys to {KEYS_ENV_PATH} (chmod 600).")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
