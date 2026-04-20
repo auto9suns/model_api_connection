@@ -226,3 +226,82 @@ def test_build_record_truncates_long_error(monkeypatch, tmp_path):
 
     rec = usage_log._build_record("error", kwargs, err, start, end)
     assert len(rec["error"]) <= 514  # "RuntimeError: " (14) + 500
+
+
+def test_register_idempotent(monkeypatch, tmp_path):
+    monkeypatch.setenv("LLM_USAGE_DIR", str(tmp_path))
+    import litellm as _litellm
+    _litellm.success_callback = []
+    _litellm.failure_callback = []
+
+    usage_log.register()
+    usage_log.register()
+    usage_log.register()
+
+    assert _litellm.success_callback.count(usage_log._log_success) == 1
+    assert _litellm.failure_callback.count(usage_log._log_failure) == 1
+
+
+def test_log_success_writes_record(monkeypatch, tmp_path):
+    monkeypatch.setenv("LLM_USAGE_DIR", str(tmp_path))
+
+    kwargs = {
+        "model": "openai/gpt-4o",
+        "messages": [{"role": "user", "content": "hi"}],
+        "stream": False,
+        "litellm_params": {"metadata": {"provider": "openai"}},
+    }
+    response = _fake_response()
+    start = dt.datetime.now(dt.timezone.utc)
+    end = start + dt.timedelta(milliseconds=100)
+
+    with patch("usage_log.litellm.completion_cost", return_value=0.001):
+        usage_log._log_success(kwargs, response, start, end)
+
+    f = tmp_path / f"{socket.gethostname()}.jsonl"
+    assert f.exists()
+    rec = json.loads(f.read_text().strip())
+    assert rec["status"] == "success"
+    assert rec["provider"] == "openai"
+
+
+def test_log_failure_writes_record(monkeypatch, tmp_path):
+    monkeypatch.setenv("LLM_USAGE_DIR", str(tmp_path))
+
+    kwargs = {
+        "model": "openai/gpt-4o",
+        "messages": [],
+        "stream": False,
+        "litellm_params": {"metadata": {"provider": "openai"}},
+    }
+    err = RuntimeError("boom")
+    start = dt.datetime.now(dt.timezone.utc)
+    end = start
+
+    usage_log._log_failure(kwargs, err, start, end)
+
+    f = tmp_path / f"{socket.gethostname()}.jsonl"
+    rec = json.loads(f.read_text().strip())
+    assert rec["status"] == "error"
+    assert "boom" in rec["error"]
+
+
+def test_callback_swallows_exception(monkeypatch, tmp_path, capsys):
+    """If the writer fails, callback should warn on stderr but not raise."""
+    monkeypatch.setenv("LLM_USAGE_DIR", "/dev/null/cannot-write")
+
+    kwargs = {
+        "model": "openai/gpt-4o",
+        "messages": [],
+        "stream": False,
+        "litellm_params": {"metadata": {"provider": "openai"}},
+    }
+    response = _fake_response()
+    start = dt.datetime.now(dt.timezone.utc)
+    end = start
+
+    # Should not raise
+    usage_log._log_success(kwargs, response, start, end)
+
+    captured = capsys.readouterr()
+    assert "usage_log" in captured.err.lower()

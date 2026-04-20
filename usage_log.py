@@ -101,3 +101,29 @@ def _build_record(status: str, kwargs: dict, response, start_time: dt.datetime, 
         record["completion"] = completion_text
 
     return record
+
+
+def _stderr_warn(msg: str) -> None:
+    print(f"[usage_log] WARN: {msg}", file=sys.stderr)
+
+
+def _log_success(kwargs, response, start_time, end_time):
+    try:
+        _write_record(_build_record("success", kwargs, response, start_time, end_time))
+    except Exception as e:
+        _stderr_warn(f"success callback failed: {type(e).__name__}: {e}")
+
+
+def _log_failure(kwargs, response, start_time, end_time):
+    try:
+        _write_record(_build_record("error", kwargs, response, start_time, end_time))
+    except Exception as e:
+        _stderr_warn(f"failure callback failed: {type(e).__name__}: {e}")
+
+
+def register() -> None:
+    """Register usage_log callbacks with litellm. Idempotent."""
+    if _log_success not in litellm.success_callback:
+        litellm.success_callback.append(_log_success)
+    if _log_failure not in litellm.failure_callback:
+        litellm.failure_callback.append(_log_failure)

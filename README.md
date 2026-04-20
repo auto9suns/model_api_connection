@@ -35,7 +35,7 @@ response = llm.chat("你好", provider="openai")
 | `test_models.py` | CLI 工具：验证 API key 和模型连通性 |
 | `fetch_models.py` | CLI 工具：从 API 拉取最新模型列表 |
 | `_fetch_helpers.py` | fetch_models.py 的内部辅助模块 |
-| `usage_log.py` | LLM 调用日志底层：路径解析 + JSONL writer + caller 识别 + record builder |
+| `usage_log.py` | LLM 调用日志底层：路径解析 + JSONL writer + caller 识别 + record builder + litellm callback 注册 |
 | `tests/` | 单元测试（`pytest tests/`） |
 | `.env.example` | API key 模板 |
 
@@ -290,6 +290,41 @@ from gemini_uploader import upload_video
 uri = upload_video("video.mp4", api_key="AIza...")
 # 返回: "https://generativelanguage.googleapis.com/v1beta/files/..."
 ```
+
+---
+
+## LLM 用量日志
+
+`usage_log.py` 通过 litellm callback 自动记录每次调用，写入 JSONL 文件。
+
+### 启用
+
+```python
+import usage_log
+usage_log.register()  # 幂等，可重复调用
+```
+
+调用后，所有经过 litellm 的请求（成功或失败）都会追加写入：
+
+```
+$LLM_USAGE_DIR/<hostname>.jsonl   # 默认目录见下方环境变量
+```
+
+### 环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `LLM_USAGE_DIR` | `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/llm-usage` | JSONL 输出目录 |
+| `LLM_CALLER` | `sys.argv[0]` | 调用方标识（覆盖自动检测） |
+| `LLM_LOG_PAYLOAD` | 未设置 | 设为 `1` 时记录完整 prompt 和 completion |
+
+### 日志字段
+
+每行 JSON 包含：`ts`、`host`、`provider`、`model`、`caller_script`、`input_tokens`、`output_tokens`、`cost_usd`、`latency_ms`、`status`（`success`/`error`）、`error`、`request_id`、`stream`。
+
+### 异常隔离
+
+写日志失败时只向 stderr 打印警告，不影响主调用链。
 
 ---
 
