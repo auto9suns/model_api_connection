@@ -55,10 +55,13 @@ pip install -e .
 
 **2. 配置 API key**
 
+推荐方式：通过 `llm-sync-keys` 从 1Password 同步到 `~/.config/llm/keys.env`（详见下方 CLI 工具章节）：
+
 ```bash
-cp .env.example .env
-# 编辑 .env 填入你的 key
+llm-sync-keys          # 需安装并登录 op CLI
 ```
+
+`model_connector` 在 import 时会自动加载 `~/.config/llm/keys.env`，shell 中已导出的同名变量优先级更高，不会被覆盖。
 
 或直接导出环境变量：
 

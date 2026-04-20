@@ -44,16 +44,18 @@ from usage_log import register as _register_usage_log
 
 _register_usage_log()
 
+import paths
+from paths import CONFIG_PATH
+
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    if paths.KEYS_ENV_PATH.exists():
+        load_dotenv(paths.KEYS_ENV_PATH, override=False)
 except ImportError:
     pass
 
 
 __all__ = ["LLMConnector", "chat", "get_connector", "strip_think_stream"]
-
-CONFIG_PATH = Path(__file__).parent / "models_config.json"
 
 
 # ── Main connector ─────────────────────────────────────────────────────────────
