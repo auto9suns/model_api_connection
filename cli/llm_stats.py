@@ -66,14 +66,16 @@ def _parse_filter(specs: list[str]) -> list[tuple[str, str, str]]:
     """['provider=openai', 'caller~foo'] -> [(key, op, val), ...]."""
     out = []
     for spec in specs:
-        if "~" in spec:
+        eq_pos = spec.find("=")
+        tilde_pos = spec.find("~")
+        if eq_pos == -1 and tilde_pos == -1:
+            raise ValueError(f"invalid --filter: {spec!r} (use key=val or key~val)")
+        if tilde_pos != -1 and (eq_pos == -1 or tilde_pos < eq_pos):
             k, v = spec.split("~", 1)
             out.append((k.strip(), "~", v.strip()))
-        elif "=" in spec:
+        else:
             k, v = spec.split("=", 1)
             out.append((k.strip(), "=", v.strip()))
-        else:
-            raise ValueError(f"invalid --filter: {spec!r} (use key=val or key~val)")
     return out
 
 
