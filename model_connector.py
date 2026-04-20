@@ -170,8 +170,10 @@ class LLMConnector:
         if not key:
             raise EnvironmentError(
                 f"API key for '{provider}' not found. "
-                f"Set the '{env_var}' environment variable or pass "
-                f"api_keys={{'{provider}': '...'}} to LLMConnector()."
+                f"Set the '{env_var}' environment variable, pass "
+                f"api_keys={{'{provider}': '...'}} to LLMConnector(), "
+                f"or run `llm-sync-keys` to populate "
+                f"~/.config/llm/keys.env from 1Password."
             )
         return key
 
