@@ -200,3 +200,95 @@ def test_aggregate_by_combined_keys():
     assert keys == [("openai", "mac1"), ("openai", "mac2")]
     by_key = {(r["provider"], r["host"]): r for r in result}
     assert by_key[("openai", "mac1")]["calls"] == 2
+
+
+def test_format_table_basic():
+    from cli import llm_stats
+    rows = [
+        {"provider": "openai", "calls": 10, "cost_usd": 1.234},
+        {"provider": "anthropic", "calls": 5, "cost_usd": None},
+    ]
+    out = llm_stats._format_table(rows, ["provider", "calls", "cost_usd"])
+    assert "openai" in out
+    assert "anthropic" in out
+    assert "1.234" in out or "1.23" in out
+    assert "null" in out or "-" in out
+
+
+def test_format_table_empty():
+    from cli import llm_stats
+    out = llm_stats._format_table([], ["provider", "calls"])
+    assert "no data" in out.lower() or out.strip() == ""
+
+
+def test_main_paths(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("LLM_USAGE_DIR", str(tmp_path))
+    _write_jsonl(tmp_path / "host.jsonl", [_sample(), _sample()])
+
+    import importlib
+    from cli import llm_stats
+    importlib.reload(llm_stats)
+    rc = llm_stats.main(["--paths"])
+    out = capsys.readouterr().out
+    assert str(tmp_path) in out
+    assert "host.jsonl" in out
+    assert "2" in out
+    assert rc == 0
+
+
+def test_main_raw(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("LLM_USAGE_DIR", str(tmp_path))
+    _write_jsonl(tmp_path / "host.jsonl", [_sample(provider="openai")])
+
+    import importlib
+    from cli import llm_stats
+    importlib.reload(llm_stats)
+    rc = llm_stats.main(["--raw"])
+    out = capsys.readouterr().out
+    parsed = json.loads(out.strip().splitlines()[0])
+    assert parsed["provider"] == "openai"
+    assert rc == 0
+
+
+def test_main_tail(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("LLM_USAGE_DIR", str(tmp_path))
+    _write_jsonl(tmp_path / "host.jsonl",
+                 [_sample(ts=f"2026-04-20T0{i}:00:00.000Z") for i in range(5)])
+
+    import importlib
+    from cli import llm_stats
+    importlib.reload(llm_stats)
+    rc = llm_stats.main(["--tail", "2", "--raw"])
+    out = capsys.readouterr().out
+    lines = out.strip().splitlines()
+    assert len(lines) == 2
+    assert json.loads(lines[1])["ts"] == "2026-04-20T04:00:00.000Z"
+    assert rc == 0
+
+
+def test_main_filter_provider(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("LLM_USAGE_DIR", str(tmp_path))
+    _write_jsonl(tmp_path / "host.jsonl", [
+        _sample(provider="siliconflow", caller="/work/runaway.py"),
+        _sample(provider="openai", caller="/work/other.py"),
+    ])
+
+    import importlib
+    from cli import llm_stats
+    importlib.reload(llm_stats)
+    rc = llm_stats.main(["--filter", "provider=siliconflow", "--by", "caller", "--raw"])
+    out = capsys.readouterr().out
+    assert "runaway" in out
+    assert "other.py" not in out
+    assert rc == 0
+
+
+def test_main_no_data(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("LLM_USAGE_DIR", str(tmp_path))
+    import importlib
+    from cli import llm_stats
+    importlib.reload(llm_stats)
+    rc = llm_stats.main([])
+    out = capsys.readouterr().out
+    assert "no" in out.lower() or "empty" in out.lower() or "0" in out
+    assert rc == 0

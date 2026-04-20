@@ -365,6 +365,40 @@ result = llm_stats._aggregate(rows, by=["provider", "host"])
 # -> [{"provider": "openai", "host": "mac1", "calls": 5, "input_tokens": 1200, ...}, ...]
 ```
 
+### llm-stats CLI
+
+`cli/llm_stats.py` 提供 `main(argv)` 入口，可直接作为命令行工具使用：
+
+```bash
+# 查看日志目录和各文件状态
+python -m cli.llm_stats --paths
+
+# 过去 24 小时按 provider 汇总（默认）
+python -m cli.llm_stats
+
+# 自定义时间窗口
+python -m cli.llm_stats --since 7d
+python -m cli.llm_stats --since 2026-04-19T00:00:00Z
+
+# 按多键 group by
+python -m cli.llm_stats --by provider,host
+
+# 过滤后输出原始 JSONL（便于 jq）
+python -m cli.llm_stats --filter provider=siliconflow --raw
+
+# 查看最近 N 条原始记录
+python -m cli.llm_stats --tail 20 --raw
+```
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--since` | `24h` | 时间窗口：`1h` / `24h` / `7d` / `30m` / ISO 8601 |
+| `--by` | `provider` | group by 键，逗号分隔：`provider` / `model` / `caller` / `host` |
+| `--filter` | 无 | `key=val` 精确匹配 / `key~val` 子串，可多次指定 |
+| `--raw` | 关 | 输出原始 JSONL，便于管道给 `jq` |
+| `--tail` | 0 | 只看最近 N 条原始记录（按 ts 排序） |
+| `--paths` | 关 | 打印 `USAGE_DIR` 路径和各 `.jsonl` 文件行数/大小 |
+
 ---
 
 ## CLI 工具
