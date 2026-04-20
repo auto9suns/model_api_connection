@@ -33,13 +33,13 @@ response = llm.chat("你好", provider="openai")
 | `gemini_uploader.py` | 上传视频到 Gemini File API，等待处理完成，返回 URI |
 | `video_connector.py` | 统一视频理解接口，支持 Gemini / Qwen |
 | `models_config.json` | 模型注册表（增删模型改这里） |
+| `key_sync.py` | CLI 工具：从 1Password 同步 API key 到 `~/.config/llm/keys.env` |
 | `test_models.py` | CLI 工具：验证 API key 和模型连通性 |
 | `fetch_models.py` | CLI 工具：从 API 拉取最新模型列表 |
 | `_fetch_helpers.py` | fetch_models.py 的内部辅助模块 |
 | `usage_log.py` | LLM 调用日志底层：路径解析 + JSONL writer + caller 识别 + record builder + litellm callback 注册 |
 | `cli/llm_stats.py` | llm-stats CLI：跨机器 JSONL 日志合并读取、时间过滤、字段过滤、多维聚合 |
 | `tests/` | 单元测试（`pytest tests/`） |
-| `.env.example` | API key 模板 |
 
 ---
 
@@ -440,6 +440,20 @@ cron / 长期脚本请设 `LLM_CALLER=<task-name>` 便于事后追溯。
 ---
 
 ## CLI 工具
+
+### 同步 API Key（从 1Password）
+
+`key_sync.py` 从 1Password 读取 API key，写入 `~/.config/llm/keys.env`（权限 600）。
+
+**前置条件：** 安装并登录 `op` CLI（`brew install 1password-cli`），在 1Password 应用 -> Settings -> Developer -> 开启 "Integrate with 1Password CLI"。
+
+在 `models_config.json` 的 provider 中添加 `op_reference` 字段后即可使用：
+
+```bash
+uv run python key_sync.py                        # 同步所有配置了 op_reference 的 provider
+uv run python key_sync.py --provider openai      # 只同步 openai，保留其他 key 不变
+uv run python key_sync.py --dry-run              # 预览将要同步的内容，不实际执行
+```
 
 ### 测试 API 连通性
 

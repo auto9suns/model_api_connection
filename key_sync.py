@@ -94,12 +94,27 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+_AUTH_ERROR_MARKERS = ("not signed in", "you are not signed", "authenticate")
+
+
+def _read_existing_env(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+    out: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        out[k.strip()] = v.strip()
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     providers = load_providers(CONFIG_PATH, only=args.provider)
     if not providers:
         print(
-            f"No provider with 'op_reference' configured"
+            "No provider with 'op_reference' configured"
             + (f" for --provider {args.provider}" if args.provider else ""),
             file=sys.stderr,
         )
@@ -118,14 +133,32 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    keys: dict[str, str] = {}
+    fetched: dict[str, str] = {}
+    failures: list[str] = []
     for name, (ref, env_var) in providers.items():
-        keys[env_var] = fetch_key(ref)
-        print(f"  OK  {name:12s} -> {env_var}")
+        try:
+            fetched[env_var] = fetch_key(ref)
+            print(f"  OK  {name:12s} -> {env_var}")
+        except OpError as exc:
+            msg = str(exc).lower()
+            if any(marker in msg for marker in _AUTH_ERROR_MARKERS):
+                print(
+                    "Error: 'op' CLI is not authenticated.\n"
+                    "Open 1Password app -> Settings -> Developer -> "
+                    "enable 'Integrate with 1Password CLI'",
+                    file=sys.stderr,
+                )
+                return 1
+            print(f"  FAIL {name:12s} {exc}", file=sys.stderr)
+            failures.append(name)
 
-    write_keys_env(keys, KEYS_ENV_PATH)
-    print(f"\nWrote {len(keys)} keys to {KEYS_ENV_PATH} (chmod 600).")
-    return 0
+    if fetched:
+        merged = _read_existing_env(KEYS_ENV_PATH) if args.provider else {}
+        merged.update(fetched)
+        write_keys_env(merged, KEYS_ENV_PATH)
+        print(f"\nWrote {len(merged)} keys to {KEYS_ENV_PATH} (chmod 600).")
+
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":

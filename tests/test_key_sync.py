@@ -204,3 +204,92 @@ def test_main_dry_run_does_not_call_op_or_write_file(
     out = capsys.readouterr().out
     assert "op://llmkeys/OpenAI/credential" in out
     assert "OPENAI_API_KEY" in out
+
+
+def test_main_missing_op_prints_install_hint(
+    sample_config, tmp_path, monkeypatch, capsys
+):
+    monkeypatch.setattr("key_sync.CONFIG_PATH", sample_config)
+    monkeypatch.setattr("key_sync.KEYS_ENV_PATH", tmp_path / "keys.env")
+    monkeypatch.setattr("key_sync.shutil.which", lambda _name: None)
+
+    rc = main([])
+
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "brew install 1password-cli" in err
+
+
+def test_main_unauthenticated_op_prints_cli_integration_hint(
+    sample_config, tmp_path, monkeypatch, capsys
+):
+    monkeypatch.setattr("key_sync.CONFIG_PATH", sample_config)
+    monkeypatch.setattr("key_sync.KEYS_ENV_PATH", tmp_path / "keys.env")
+    monkeypatch.setattr("key_sync.shutil.which", lambda _name: "/usr/local/bin/op")
+
+    def fake_run(_cmd, **_kwargs):
+        return MagicMock(
+            returncode=1, stdout="", stderr="Error: You are not signed in."
+        )
+
+    monkeypatch.setattr("key_sync.subprocess.run", fake_run)
+
+    rc = main([])
+
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "Integrate with 1Password CLI" in err
+
+
+def test_main_partial_failure_writes_remaining_keys_and_exits_nonzero(
+    sample_config, tmp_path, monkeypatch, capsys
+):
+    target = tmp_path / "keys.env"
+    monkeypatch.setattr("key_sync.CONFIG_PATH", sample_config)
+    monkeypatch.setattr("key_sync.KEYS_ENV_PATH", target)
+    monkeypatch.setattr("key_sync.shutil.which", lambda _name: "/usr/local/bin/op")
+
+    def fake_run(cmd, **_kwargs):
+        ref = cmd[-1]
+        if "OpenAI" in ref:
+            return MagicMock(returncode=0, stdout="sk-openai\n", stderr="")
+        return MagicMock(returncode=1, stdout="", stderr="item not found")
+
+    monkeypatch.setattr("key_sync.subprocess.run", fake_run)
+
+    rc = main([])
+
+    assert rc == 1
+    contents = target.read_text(encoding="utf-8")
+    assert "OPENAI_API_KEY=sk-openai" in contents
+    assert "ANTHROPIC_API_KEY" not in contents
+    err = capsys.readouterr().err
+    assert "anthropic" in err.lower()
+
+
+def test_main_single_provider_preserves_other_keys(
+    sample_config, tmp_path, monkeypatch
+):
+    target = tmp_path / "keys.env"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        "OPENAI_API_KEY=old-openai\nANTHROPIC_API_KEY=old-ant\n",
+        encoding="utf-8",
+    )
+    os.chmod(target, 0o600)
+
+    monkeypatch.setattr("key_sync.CONFIG_PATH", sample_config)
+    monkeypatch.setattr("key_sync.KEYS_ENV_PATH", target)
+    monkeypatch.setattr("key_sync.shutil.which", lambda _name: "/usr/local/bin/op")
+
+    def fake_run(_cmd, **_kwargs):
+        return MagicMock(returncode=0, stdout="sk-new-openai\n", stderr="")
+
+    monkeypatch.setattr("key_sync.subprocess.run", fake_run)
+
+    rc = main(["--provider", "openai"])
+
+    assert rc == 0
+    contents = target.read_text(encoding="utf-8")
+    assert "OPENAI_API_KEY=sk-new-openai" in contents
+    assert "ANTHROPIC_API_KEY=old-ant" in contents
