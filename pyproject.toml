@@ -19,9 +19,10 @@ dev = [
 
 [project.scripts]
 llm-stats = "cli.llm_stats:main"
+llm-sync-keys = "key_sync:main"
 
 [tool.setuptools]
-py-modules = ["model_connector", "video_connector", "gemini_uploader", "usage_log"]
+py-modules = ["model_connector", "video_connector", "gemini_uploader", "usage_log", "paths", "key_sync"]
 packages = ["cli"]
 
 [tool.setuptools.package-data]
