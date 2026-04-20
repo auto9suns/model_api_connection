@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from key_sync import load_providers, fetch_key, OpError, write_keys_env
+from key_sync import load_providers, fetch_key, OpError, write_keys_env, main
 
 
 def test_load_providers_returns_provider_with_op_reference(tmp_path):
@@ -133,11 +133,6 @@ def test_write_keys_env_preserves_insertion_order(tmp_path):
     )
 
     assert target.read_text(encoding="utf-8") == "A_KEY=a\nB_KEY=b\nC_KEY=c\n"
-
-
-import shutil as real_shutil
-
-from key_sync import main
 
 
 @pytest.fixture
