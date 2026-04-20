@@ -29,6 +29,7 @@ response = llm.chat("你好", provider="openai")
 | 文件 | 用途 |
 |------|------|
 | `model_connector.py` | 核心连接器 — 其他项目 import 这个 |
+| `paths.py` | 路径常量（API key 缓存目录、config 文件位置） |
 | `gemini_uploader.py` | 上传视频到 Gemini File API，等待处理完成，返回 URI |
 | `video_connector.py` | 统一视频理解接口，支持 Gemini / Qwen |
 | `models_config.json` | 模型注册表（增删模型改这里） |
