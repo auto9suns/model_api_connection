@@ -189,7 +189,8 @@ def _print_paths() -> None:
         print("(目录为空)")
         return
     for f in files:
-        n_lines = sum(1 for _ in open(f, "r", encoding="utf-8"))
+        with open(f, "r", encoding="utf-8") as fh:
+            n_lines = sum(1 for _ in fh)
         size_kb = f.stat().st_size / 1024
         print(f"  {f.name:30s}  {n_lines:>6d} 行  {size_kb:>8.1f} KB")
 
@@ -212,17 +213,7 @@ def main(argv: list[str] | None = None) -> int:
 
     records = list(_iter_records())
 
-    if args.tail > 0:
-        records = sorted(records, key=lambda r: r.get("ts", ""))[-args.tail:]
-        if args.raw:
-            for r in records:
-                print(json.dumps(r, ensure_ascii=False))
-        else:
-            cols = ["ts", "host", "provider", "model", "caller_script",
-                    "input_tokens", "output_tokens", "cost_usd", "status"]
-            print(_format_table(records, cols))
-        return 0
-
+    # Apply --since and --filter first (applies to ALL modes including --tail)
     try:
         cutoff = _parse_since(args.since)
     except ValueError as e:
@@ -236,6 +227,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
     records = list(_apply_filters(records, filters))
+
+    if args.tail > 0:
+        records = sorted(records, key=lambda r: r.get("ts", ""))[-args.tail:]
+        if args.raw:
+            for r in records:
+                print(json.dumps(r, ensure_ascii=False))
+        else:
+            cols = ["ts", "host", "provider", "model", "caller_script",
+                    "input_tokens", "output_tokens", "cost_usd", "status"]
+            print(_format_table(records, cols))
+        return 0
 
     if not records:
         print(f"(no data in window since={args.since}, filter={args.filter})")
