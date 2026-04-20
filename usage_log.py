@@ -3,6 +3,7 @@
 import json
 import os
 import socket
+import sys
 from pathlib import Path
 
 
@@ -27,3 +28,12 @@ def _write_record(record: dict) -> None:
         f.write(line)
     if not existed:
         target.chmod(0o600)
+
+
+def _get_caller() -> dict:
+    return {
+        "caller_script": os.environ.get("LLM_CALLER") or sys.argv[0] or "<repl>",
+        "caller_cwd": os.getcwd(),
+        "caller_pid": os.getpid(),
+        "caller_ppid": os.getppid(),
+    }

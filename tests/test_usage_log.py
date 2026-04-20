@@ -79,3 +79,25 @@ def test_write_record_unicode(monkeypatch, tmp_path):
 
     f = tmp_path / f"{socket.gethostname()}.jsonl"
     assert "你好" in f.read_text()
+
+
+def test_get_caller_uses_argv(monkeypatch):
+    monkeypatch.delenv("LLM_CALLER", raising=False)
+    monkeypatch.setattr(sys, "argv", ["/some/script.py"])
+    caller = usage_log._get_caller()
+    assert caller["caller_script"] == "/some/script.py"
+    assert caller["caller_cwd"] == os.getcwd()
+    assert isinstance(caller["caller_pid"], int)
+    assert isinstance(caller["caller_ppid"], int)
+
+
+def test_get_caller_env_var_wins(monkeypatch):
+    monkeypatch.setenv("LLM_CALLER", "daily-summary")
+    monkeypatch.setattr(sys, "argv", ["/some/script.py"])
+    assert usage_log._get_caller()["caller_script"] == "daily-summary"
+
+
+def test_get_caller_repl_fallback(monkeypatch):
+    monkeypatch.delenv("LLM_CALLER", raising=False)
+    monkeypatch.setattr(sys, "argv", [""])
+    assert usage_log._get_caller()["caller_script"] == "<repl>"
