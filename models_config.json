@@ -2,7 +2,6 @@
   "providers": {
     "openai": {
       "api_key_env": "OPENAI_API_KEY",
-      "op_reference": "op://llmkeys/OpenAI/credential",
       "default_model": "gpt-4o",
       "models": {
         "gpt-4o":      "openai/gpt-4o",
