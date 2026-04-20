@@ -74,7 +74,7 @@ def _build_record(status: str, kwargs: dict, response, start_time: dt.datetime, 
         msg = prefix + str(response)
         error = msg[: len(prefix) + _ERROR_MAX_LEN]
 
-    ts = dt.datetime.now(dt.timezone.utc)
+    ts = end_time.astimezone(dt.timezone.utc)
     ts_str = ts.strftime("%Y-%m-%dT%H:%M:%S.") + f"{ts.microsecond // 1000:03d}Z"
 
     record = {
