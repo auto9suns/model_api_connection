@@ -2,6 +2,7 @@
   "providers": {
     "openai": {
       "api_key_env": "OPENAI_API_KEY",
+      "_op_reference_note": "no key in 1Password vault — set OPENAI_API_KEY manually if needed",
       "default_model": "gpt-4o",
       "models": {
         "gpt-4o":      "openai/gpt-4o",

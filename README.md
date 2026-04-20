@@ -456,9 +456,9 @@ cron / 长期脚本请设 `LLM_CALLER=<task-name>` 便于事后追溯。
 在 `models_config.json` 的 provider 中添加 `op_reference`（如 `op://llmkeys/OpenAI/credential`）字段后即可使用：
 
 ```bash
-uv run python key_sync.py                        # 同步所有配置了 op_reference 的 provider
-uv run python key_sync.py --provider openai      # 只同步 openai，保留其他 key 不变
-uv run python key_sync.py --dry-run              # 预览将要同步的内容，不实际执行
+llm-sync-keys                        # 同步所有配置了 op_reference 的 provider
+llm-sync-keys --provider openai      # 只同步 openai，保留其他 key 不变
+llm-sync-keys --dry-run              # 预览将要同步的内容，不实际执行
 ```
 
 **同步语义：**

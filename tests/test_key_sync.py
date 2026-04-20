@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from key_sync import load_providers, fetch_key, OpError, write_keys_env, main
+from key_sync import load_providers, fetch_key, OpError, OpAuthError, write_keys_env, main
 
 
 def test_load_providers_returns_provider_with_op_reference(tmp_path):
@@ -104,7 +104,7 @@ def test_write_keys_env_creates_file_with_mode_600(tmp_path):
     assert target.exists()
     mode = target.stat().st_mode & 0o777
     assert mode == 0o600
-    assert target.read_text(encoding="utf-8") == "OPENAI_API_KEY=sk-abc\n"
+    assert target.read_text(encoding="utf-8") == 'OPENAI_API_KEY="sk-abc"\n'
 
 
 def test_write_keys_env_creates_parent_dir_with_mode_700(tmp_path):
@@ -122,7 +122,7 @@ def test_write_keys_env_overwrites_existing(tmp_path):
 
     write_keys_env({"NEW": "v"}, target)
 
-    assert target.read_text(encoding="utf-8") == "NEW=v\n"
+    assert target.read_text(encoding="utf-8") == 'NEW="v"\n'
 
 
 def test_write_keys_env_preserves_insertion_order(tmp_path):
@@ -132,7 +132,7 @@ def test_write_keys_env_preserves_insertion_order(tmp_path):
         {"A_KEY": "a", "B_KEY": "b", "C_KEY": "c"}, target
     )
 
-    assert target.read_text(encoding="utf-8") == "A_KEY=a\nB_KEY=b\nC_KEY=c\n"
+    assert target.read_text(encoding="utf-8") == 'A_KEY="a"\nB_KEY="b"\nC_KEY="c"\n'
 
 
 @pytest.fixture
@@ -175,8 +175,8 @@ def test_main_happy_path_writes_all_keys(sample_config, tmp_path, monkeypatch, c
 
     assert rc == 0
     contents = target.read_text(encoding="utf-8")
-    assert "OPENAI_API_KEY=sk-openai" in contents
-    assert "ANTHROPIC_API_KEY=sk-ant" in contents
+    assert 'OPENAI_API_KEY="sk-openai"' in contents
+    assert 'ANTHROPIC_API_KEY="sk-ant"' in contents
     out = capsys.readouterr().out
     assert "Wrote 2 keys" in out
 
@@ -241,6 +241,34 @@ def test_main_unauthenticated_op_prints_cli_integration_hint(
     assert "Integrate with 1Password CLI" in err
 
 
+def test_fetch_key_raises_op_auth_error_on_exit_code_100():
+    with patch("key_sync.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(
+            returncode=100, stdout="", stderr="[ERROR] 2024/01/01 not signed in"
+        )
+        with pytest.raises(OpAuthError):
+            fetch_key("op://llmkeys/OpenAI/credential")
+
+
+def test_main_exit_code_100_treated_as_auth_error(
+    sample_config, tmp_path, monkeypatch, capsys
+):
+    monkeypatch.setattr("key_sync.CONFIG_PATH", sample_config)
+    monkeypatch.setattr("key_sync.KEYS_ENV_PATH", tmp_path / "keys.env")
+    monkeypatch.setattr("key_sync.shutil.which", lambda _name: "/usr/local/bin/op")
+
+    def fake_run(_cmd, **_kwargs):
+        return MagicMock(returncode=100, stdout="", stderr="auth required")
+
+    monkeypatch.setattr("key_sync.subprocess.run", fake_run)
+
+    rc = main([])
+
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "Integrate with 1Password CLI" in err
+
+
 def test_main_partial_failure_writes_remaining_keys_and_exits_nonzero(
     sample_config, tmp_path, monkeypatch, capsys
 ):
@@ -261,7 +289,7 @@ def test_main_partial_failure_writes_remaining_keys_and_exits_nonzero(
 
     assert rc == 1
     contents = target.read_text(encoding="utf-8")
-    assert "OPENAI_API_KEY=sk-openai" in contents
+    assert 'OPENAI_API_KEY="sk-openai"' in contents
     assert "ANTHROPIC_API_KEY" not in contents
     err = capsys.readouterr().err
     assert "anthropic" in err.lower()
@@ -291,8 +319,8 @@ def test_main_single_provider_preserves_other_keys(
 
     assert rc == 0
     contents = target.read_text(encoding="utf-8")
-    assert "OPENAI_API_KEY=sk-new-openai" in contents
-    assert "ANTHROPIC_API_KEY=old-ant" in contents
+    assert 'OPENAI_API_KEY="sk-new-openai"' in contents
+    assert 'ANTHROPIC_API_KEY="old-ant"' in contents
 
 
 def test_main_full_sync_overwrites_untracked_keys(
@@ -326,6 +354,6 @@ def test_main_full_sync_overwrites_untracked_keys(
     assert rc == 0
     contents = target.read_text(encoding="utf-8")
     # Full sync replaces file entirely with 1P contents (1P is SSoT)
-    assert "OPENAI_API_KEY=sk-new-openai" in contents
-    assert "ANTHROPIC_API_KEY=sk-ant" in contents
+    assert 'OPENAI_API_KEY="sk-new-openai"' in contents
+    assert 'ANTHROPIC_API_KEY="sk-ant"' in contents
     assert "CUSTOM_KEY" not in contents

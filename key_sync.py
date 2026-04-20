@@ -18,6 +18,10 @@ class OpError(RuntimeError):
     """Raised when `op` CLI returns a non-zero exit code."""
 
 
+class OpAuthError(OpError):
+    """Raised when `op` CLI returns exit code 100 (auth failure)."""
+
+
 def load_providers(
     config_path: Path, only: str | None = None
 ) -> dict[str, tuple[str, str]]:
@@ -51,7 +55,10 @@ def fetch_key(op_reference: str) -> str:
         check=False,
     )
     if result.returncode != 0:
-        raise OpError(result.stderr.strip() or "op read failed")
+        stderr = result.stderr.strip() or "op read failed"
+        if result.returncode == 100:
+            raise OpAuthError(stderr)
+        raise OpError(stderr)
     return result.stdout.strip()
 
 
@@ -60,8 +67,10 @@ def write_keys_env(keys: dict[str, str], target: Path) -> None:
 
     The parent directory is created with mode 0700 if needed.
     """
+    created = not target.parent.exists()
     target.parent.mkdir(parents=True, exist_ok=True)
-    os.chmod(target.parent, 0o700)  # nosec B103  # nosemgrep
+    if created:
+        os.chmod(target.parent, 0o700)  # nosec B103  # nosemgrep
 
     fd, tmp_name = tempfile.mkstemp(
         prefix=".keys.env.", dir=str(target.parent)
@@ -69,7 +78,7 @@ def write_keys_env(keys: dict[str, str], target: Path) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             for env_var, value in keys.items():
-                f.write(f"{env_var}={value}\n")
+                f.write(f'{env_var}="{value}"\n')
         os.chmod(tmp_name, 0o600)
         os.replace(tmp_name, target)
     except BaseException:
@@ -105,7 +114,8 @@ def _read_existing_env(path: Path) -> dict[str, str]:
         if not line or line.startswith("#") or "=" not in line:
             continue
         k, _, v = line.partition("=")
-        out[k.strip()] = v.strip()
+        v = v.strip().strip('"')
+        out[k.strip()] = v
     return out
 
 
@@ -139,6 +149,14 @@ def main(argv: list[str] | None = None) -> int:
         try:
             fetched[env_var] = fetch_key(ref)
             print(f"  OK  {name:12s} -> {env_var}")
+        except OpAuthError:
+            print(
+                "Error: 'op' CLI is not authenticated.\n"
+                "Open 1Password app -> Settings -> Developer -> "
+                "enable 'Integrate with 1Password CLI'",
+                file=sys.stderr,
+            )
+            return 1
         except OpError as exc:
             msg = str(exc).lower()
             if any(marker in msg for marker in _AUTH_ERROR_MARKERS):
