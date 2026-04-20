@@ -35,6 +35,8 @@ response = llm.chat("你好", provider="openai")
 | `test_models.py` | CLI 工具：验证 API key 和模型连通性 |
 | `fetch_models.py` | CLI 工具：从 API 拉取最新模型列表 |
 | `_fetch_helpers.py` | fetch_models.py 的内部辅助模块 |
+| `usage_log.py` | LLM 调用日志底层：路径解析 + JSONL writer + caller 识别 + record builder + litellm callback 注册 |
+| `cli/llm_stats.py` | llm-stats CLI：跨机器 JSONL 日志合并读取、时间过滤、字段过滤、多维聚合 |
 | `tests/` | 单元测试（`pytest tests/`） |
 | `.env.example` | API key 模板 |
 
@@ -288,6 +290,150 @@ from gemini_uploader import upload_video
 
 uri = upload_video("video.mp4", api_key="AIza...")
 # 返回: "https://generativelanguage.googleapis.com/v1beta/files/..."
+```
+
+---
+
+## LLM 用量监控
+
+`usage_log.py` 通过 litellm callback 自动记录每次调用，写入 JSONL 文件。
+
+### 零侵入接入
+
+消费方项目只需安装并导入，无需任何额外配置：
+
+```bash
+pip install -e /path/to/model_api_connection
+```
+
+```python
+from model_connector import chat  # 导入即自动注册，所有调用自动记录
+```
+
+也可显式调用（幂等）：
+
+```python
+import usage_log
+usage_log.register()  # 幂等，可重复调用
+```
+
+调用后，所有经过 litellm 的请求（成功或失败）都会追加写入：
+
+```
+~/Library/Mobile Documents/iCloud~md~obsidian/Documents/llm-usage/<hostname>.jsonl
+```
+
+可通过 `LLM_USAGE_DIR` 环境变量覆盖默认目录。
+
+### iCloud 同步与多端聚合
+
+日志目录默认位于 iCloud 同步路径，文件自动跨设备同步。每台机器写入自己的 `<hostname>.jsonl`，在任意一台机器上执行 `llm-stats` 即可看到所有已同步设备的记录。
+
+### 环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `LLM_USAGE_DIR` | `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/llm-usage` | JSONL 输出目录 |
+| `LLM_CALLER` | `sys.argv[0]` | 调用方标识（覆盖自动检测） |
+| `LLM_LOG_PAYLOAD` | 未设置 | 设为 `1` 时记录完整 prompt 和 completion |
+
+### cron / launchd 署名（LLM_CALLER）
+
+无人值守任务无法自动识别调用方，建议显式设置 `LLM_CALLER`：
+
+```bash
+LLM_CALLER=daily-summary python ~/scripts/daily.py
+```
+
+事后可按 caller 聚合查询：
+
+```bash
+llm-stats --since 7d --by caller
+```
+
+### 临时记录 prompt/completion（LLM_LOG_PAYLOAD）
+
+调试时可临时开启完整内容记录：
+
+```bash
+LLM_LOG_PAYLOAD=1 python ~/scripts/repro.py
+llm-stats --tail 1 --raw | jq '.prompt, .completion'
+```
+
+### 日志字段
+
+每行 JSON 包含：`ts`、`host`、`provider`、`model`、`caller_script`、`input_tokens`、`output_tokens`、`cost_usd`、`latency_ms`、`status`（`success`/`error`）、`error`、`request_id`、`stream`。
+
+### 异常隔离
+
+写日志失败时只向 stderr 打印警告，不影响主调用链。
+
+### llm-stats CLI
+
+`llm-stats` 为注册的命令行工具，安装后可直接使用：
+
+```bash
+llm-stats                                            # 最近 24h，按 provider 聚合
+llm-stats --since 1h --by caller                     # 最近 1h，按 caller 聚合
+llm-stats --since 7d --by host                       # 最近一周，按机器聚合
+llm-stats --filter provider=siliconflow --since 36h  # 排查异常 provider
+llm-stats --filter caller~runaway --raw              # 看具体调用
+llm-stats --tail 50                                  # 最近 50 条原始记录
+llm-stats --paths                                    # 打印日志目录与各文件状态
+```
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--since` | `24h` | 时间窗口：`1h` / `24h` / `7d` / `30m` / ISO 8601 |
+| `--by` | `provider` | group by 键，逗号分隔：`provider` / `model` / `caller` / `host` |
+| `--filter` | 无 | `key=val` 精确匹配 / `key~val` 子串，可多次指定 |
+| `--raw` | 关 | 输出原始 JSONL，便于管道给 `jq` |
+| `--tail` | 0 | 只看最近 N 条原始记录（按 ts 排序） |
+| `--paths` | 关 | 打印 `USAGE_DIR` 路径和各 `.jsonl` 文件行数/大小 |
+
+### 查询 API（`cli/llm_stats.py`）
+
+`_parse_since(value, now=None)` — 解析时间窗口，支持相对格式（`1h` / `24h` / `7d` / `30m`）或 ISO 8601：
+
+```python
+from cli import llm_stats
+import datetime as dt
+
+cutoff = llm_stats._parse_since("24h")           # 过去 24 小时
+cutoff = llm_stats._parse_since("2026-04-19T00:00:00Z")  # 绝对时间
+```
+
+`_parse_filter(specs)` — 解析过滤条件列表，支持精确匹配（`=`）和子串匹配（`~`）：
+
+```python
+filters = llm_stats._parse_filter(["provider=openai", "caller~runaway.py"])
+# -> [("provider", "=", "openai"), ("caller", "~", "runaway.py")]
+```
+
+`_apply_since(rows, cutoff)` / `_apply_filters(rows, filters)` — 流式过滤（生成器）：
+
+```python
+rows = llm_stats._iter_records()
+rows = llm_stats._apply_since(rows, cutoff)
+rows = llm_stats._apply_filters(rows, filters)
+```
+
+`_aggregate(rows, by)` — 按多键 group by，汇总 calls / input_tokens / output_tokens / cost_usd（cost 全为 null 则聚合结果也为 null）：
+
+```python
+result = llm_stats._aggregate(rows, by=["provider", "host"])
+# -> [{"provider": "openai", "host": "mac1", "calls": 5, "input_tokens": 1200, ...}, ...]
+```
+
+### 消费方 CLAUDE.md 推荐模板
+
+在消费方项目的 `CLAUDE.md` 中加入以下片段，让 AI 助手知道如何处理 LLM 调用记录：
+
+```
+## LLM 调用
+用 `from model_connector import chat`。所有调用自动记录到本机 iCloud 同步的
+`llm-usage/`，可在任意机器跑 `llm-stats` 查询。
+cron / 长期脚本请设 `LLM_CALLER=<task-name>` 便于事后追溯。
 ```
 
 ---

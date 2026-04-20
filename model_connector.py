@@ -40,6 +40,9 @@ from pathlib import Path
 from typing import Iterator
 
 import litellm
+from usage_log import register as _register_usage_log
+
+_register_usage_log()
 
 try:
     from dotenv import load_dotenv
@@ -115,6 +118,7 @@ class LLMConnector:
             "messages": messages,
             "stream": stream,
             "api_key": api_key,
+            "metadata": {**kwargs.pop("metadata", {}), "provider": provider},
             **kwargs,
         }
         if "base_url" in prov_cfg:
