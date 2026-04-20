@@ -56,6 +56,14 @@
         "SenseVoiceSmall":                  "openai/FunAudioLLM/SenseVoiceSmall"
       }
     },
+    "meai": {
+      "api_key_env": "MEAI_API_KEY",
+      "base_url": "http://114.132.99.114:3000/v1",
+      "default_model": "glm-5.1",
+      "models": {
+        "glm-5.1": "openai/glm-5.1"
+      }
+    },
     "poe": {
       "api_key_env": "POE_API_KEY",
       "op_reference": "op://llmkeys/Poe/credential",
