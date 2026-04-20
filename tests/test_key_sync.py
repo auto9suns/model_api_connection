@@ -293,3 +293,39 @@ def test_main_single_provider_preserves_other_keys(
     contents = target.read_text(encoding="utf-8")
     assert "OPENAI_API_KEY=sk-new-openai" in contents
     assert "ANTHROPIC_API_KEY=old-ant" in contents
+
+
+def test_main_full_sync_overwrites_untracked_keys(
+    sample_config, tmp_path, monkeypatch
+):
+    target = tmp_path / "keys.env"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        "OPENAI_API_KEY=old-openai\nCUSTOM_KEY=custom-value\n",
+        encoding="utf-8",
+    )
+    os.chmod(target, 0o600)
+
+    monkeypatch.setattr("key_sync.CONFIG_PATH", sample_config)
+    monkeypatch.setattr("key_sync.KEYS_ENV_PATH", target)
+    monkeypatch.setattr("key_sync.shutil.which", lambda _name: "/usr/local/bin/op")
+
+    call_outputs = {
+        "op://llmkeys/OpenAI/credential": "sk-new-openai\n",
+        "op://llmkeys/Anthropic/credential": "sk-ant\n",
+    }
+
+    def fake_run(cmd, **_kwargs):
+        ref = cmd[-1]
+        return MagicMock(returncode=0, stdout=call_outputs[ref], stderr="")
+
+    monkeypatch.setattr("key_sync.subprocess.run", fake_run)
+
+    rc = main([])
+
+    assert rc == 0
+    contents = target.read_text(encoding="utf-8")
+    # Full sync replaces file entirely with 1P contents (1P is SSoT)
+    assert "OPENAI_API_KEY=sk-new-openai" in contents
+    assert "ANTHROPIC_API_KEY=sk-ant" in contents
+    assert "CUSTOM_KEY" not in contents
