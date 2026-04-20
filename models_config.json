@@ -2,6 +2,7 @@
   "providers": {
     "openai": {
       "api_key_env": "OPENAI_API_KEY",
+      "_op_reference_note": "no key in 1Password vault — set OPENAI_API_KEY manually if needed",
       "default_model": "gpt-4o",
       "models": {
         "gpt-4o":      "openai/gpt-4o",
@@ -14,6 +15,7 @@
     },
     "anthropic": {
       "api_key_env": "ANTHROPIC_API_KEY",
+      "op_reference": "op://llmkeys/Anthropic/credential",
       "default_model": "sonnet-4.6",
       "models": {
         "opus-4.6":   "anthropic/claude-opus-4-6",
@@ -23,6 +25,7 @@
     },
     "gemini": {
       "api_key_env": "GEMINI_API_KEY",
+      "op_reference": "op://llmkeys/Gemini/credential",
       "default_model": "gemini-2.5-flash",
       "models": {
         "gemini-2.5-flash":                    "gemini/gemini-2.5-flash",
@@ -33,6 +36,7 @@
     },
     "siliconflow": {
       "api_key_env": "SILICONFLOW_API_KEY",
+      "op_reference": "op://llmkeys/SiliconFlow/credential",
       "base_url": "https://api.siliconflow.cn/v1",
       "default_model": "Kimi-K2.5",
       "models": {
@@ -54,6 +58,7 @@
     },
     "poe": {
       "api_key_env": "POE_API_KEY",
+      "op_reference": "op://llmkeys/Poe/credential",
       "default_model": "Claude-Sonnet-4.5",
       "models": {
         "Claude-Opus-4.5":   "poe/Claude-Opus-4.5",

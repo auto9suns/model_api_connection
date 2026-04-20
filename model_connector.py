@@ -44,16 +44,18 @@ from usage_log import register as _register_usage_log
 
 _register_usage_log()
 
+import paths
+from paths import CONFIG_PATH
+
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    if paths.KEYS_ENV_PATH.exists():
+        load_dotenv(paths.KEYS_ENV_PATH, override=False)
 except ImportError:
     pass
 
 
 __all__ = ["LLMConnector", "chat", "get_connector", "strip_think_stream"]
-
-CONFIG_PATH = Path(__file__).parent / "models_config.json"
 
 
 # ── Main connector ─────────────────────────────────────────────────────────────
@@ -168,8 +170,10 @@ class LLMConnector:
         if not key:
             raise EnvironmentError(
                 f"API key for '{provider}' not found. "
-                f"Set the '{env_var}' environment variable or pass "
-                f"api_keys={{'{provider}': '...'}} to LLMConnector()."
+                f"Set the '{env_var}' environment variable, pass "
+                f"api_keys={{'{provider}': '...'}} to LLMConnector(), "
+                f"or run `llm-sync-keys` to populate "
+                f"~/.config/llm/keys.env from 1Password."
             )
         return key
 
