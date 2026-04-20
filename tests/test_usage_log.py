@@ -1,12 +1,13 @@
 """Unit tests for usage_log."""
 
+import datetime as dt
 import json
 import os
 import socket
 import stat
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -101,3 +102,127 @@ def test_get_caller_repl_fallback(monkeypatch):
     monkeypatch.delenv("LLM_CALLER", raising=False)
     monkeypatch.setattr(sys, "argv", [""])
     assert usage_log._get_caller()["caller_script"] == "<repl>"
+
+
+def _fake_response(prompt_tokens=10, completion_tokens=5, content="hi"):
+    r = MagicMock()
+    r.usage.prompt_tokens = prompt_tokens
+    r.usage.completion_tokens = completion_tokens
+    r.choices = [MagicMock()]
+    r.choices[0].message.content = content
+    return r
+
+
+def test_build_record_success_minimal(monkeypatch, tmp_path):
+    monkeypatch.delenv("LLM_LOG_PAYLOAD", raising=False)
+    monkeypatch.setenv("LLM_USAGE_DIR", str(tmp_path))
+
+    kwargs = {
+        "model": "openai/gpt-4o",
+        "messages": [{"role": "user", "content": "hi"}],
+        "stream": False,
+        "litellm_params": {"metadata": {"provider": "openai"}},
+    }
+    response = _fake_response(prompt_tokens=10, completion_tokens=5)
+    start = dt.datetime(2026, 4, 20, 3, 0, 0, tzinfo=dt.timezone.utc)
+    end = dt.datetime(2026, 4, 20, 3, 0, 1, 500000, tzinfo=dt.timezone.utc)
+
+    with patch("usage_log.litellm.completion_cost", return_value=0.0312):
+        rec = usage_log._build_record("success", kwargs, response, start, end)
+
+    assert rec["status"] == "success"
+    assert rec["provider"] == "openai"
+    assert rec["model"] == "openai/gpt-4o"
+    assert rec["input_tokens"] == 10
+    assert rec["output_tokens"] == 5
+    assert rec["cost_usd"] == 0.0312
+    assert rec["latency_ms"] == 1500
+    assert rec["stream"] is False
+    assert rec["error"] is None
+    assert "request_id" in rec
+    assert "ts" in rec
+    assert rec["ts"].endswith("Z")
+    assert "prompt" not in rec
+    assert "completion" not in rec
+
+
+def test_build_record_failure(monkeypatch, tmp_path):
+    monkeypatch.setenv("LLM_USAGE_DIR", str(tmp_path))
+
+    kwargs = {
+        "model": "openai/gpt-4o",
+        "messages": [{"role": "user", "content": "hi"}],
+        "stream": False,
+        "litellm_params": {"metadata": {"provider": "openai"}},
+    }
+    err = ValueError("bad model")
+    start = dt.datetime(2026, 4, 20, 3, 0, 0, tzinfo=dt.timezone.utc)
+    end = dt.datetime(2026, 4, 20, 3, 0, 0, 100000, tzinfo=dt.timezone.utc)
+
+    rec = usage_log._build_record("error", kwargs, err, start, end)
+
+    assert rec["status"] == "error"
+    assert "ValueError" in rec["error"]
+    assert "bad model" in rec["error"]
+    assert rec["input_tokens"] is None
+    assert rec["output_tokens"] is None
+    assert rec["cost_usd"] is None
+
+
+def test_build_record_cost_unavailable(monkeypatch, tmp_path):
+    monkeypatch.setenv("LLM_USAGE_DIR", str(tmp_path))
+
+    kwargs = {
+        "model": "openai/Pro/moonshotai/Kimi-K2.5",
+        "messages": [{"role": "user", "content": "hi"}],
+        "stream": False,
+        "litellm_params": {"metadata": {"provider": "siliconflow"}},
+    }
+    response = _fake_response(prompt_tokens=100, completion_tokens=50)
+    start = dt.datetime(2026, 4, 20, 3, 0, 0, tzinfo=dt.timezone.utc)
+    end = dt.datetime(2026, 4, 20, 3, 0, 1, tzinfo=dt.timezone.utc)
+
+    with patch("usage_log.litellm.completion_cost", side_effect=Exception("not in pricelist")):
+        rec = usage_log._build_record("success", kwargs, response, start, end)
+
+    assert rec["cost_usd"] is None
+    assert rec["input_tokens"] == 100
+    assert rec["output_tokens"] == 50
+
+
+def test_build_record_payload_when_enabled(monkeypatch, tmp_path):
+    monkeypatch.setenv("LLM_LOG_PAYLOAD", "1")
+    monkeypatch.setenv("LLM_USAGE_DIR", str(tmp_path))
+
+    kwargs = {
+        "model": "openai/gpt-4o",
+        "messages": [{"role": "user", "content": "ping"}],
+        "stream": False,
+        "litellm_params": {"metadata": {"provider": "openai"}},
+    }
+    response = _fake_response(content="pong")
+    start = dt.datetime.now(dt.timezone.utc)
+    end = start + dt.timedelta(milliseconds=200)
+
+    with patch("usage_log.litellm.completion_cost", return_value=0.001):
+        rec = usage_log._build_record("success", kwargs, response, start, end)
+
+    assert rec["prompt"] == json.dumps([{"role": "user", "content": "ping"}], ensure_ascii=False)
+    assert rec["completion"] == "pong"
+
+
+def test_build_record_truncates_long_error(monkeypatch, tmp_path):
+    monkeypatch.setenv("LLM_USAGE_DIR", str(tmp_path))
+
+    kwargs = {
+        "model": "openai/gpt-4o",
+        "messages": [],
+        "stream": False,
+        "litellm_params": {"metadata": {"provider": "openai"}},
+    }
+    err = RuntimeError("x" * 1000)
+    start = dt.datetime.now(dt.timezone.utc)
+    end = start
+
+    rec = usage_log._build_record("error", kwargs, err, start, end)
+    assert len(rec["error"]) <= 514  # "RuntimeError: " (14) + 500
