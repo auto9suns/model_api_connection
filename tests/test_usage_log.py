@@ -16,10 +16,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import usage_log
 
 
-def test_usage_dir_default(monkeypatch):
+def test_usage_dir_missing_raises(monkeypatch):
     monkeypatch.delenv("LLM_USAGE_DIR", raising=False)
-    expected = Path.home() / "Library/Mobile Documents/iCloud~md~obsidian/Documents/llm-usage"
-    assert usage_log._usage_dir() == expected
+    with pytest.raises(EnvironmentError, match="LLM_USAGE_DIR"):
+        usage_log._usage_dir()
 
 
 def test_usage_dir_env_override(monkeypatch, tmp_path):
