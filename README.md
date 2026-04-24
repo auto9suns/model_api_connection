@@ -454,9 +454,15 @@ cron / 长期脚本请设 `LLM_CALLER=<task-name>` 便于事后追溯。
 
 `key_sync.py` 从 1Password 读取 API key，写入 `~/.config/llm/keys.env`（权限 600）。
 
-**前置条件：** 安装并登录 `op` CLI（`brew install 1password-cli`），在 1Password 应用 -> Settings -> Developer -> 开启 "Integrate with 1Password CLI"。密钥真相源是 1Password vault `llmkeys`（每个 provider 一条 API Credential 条目）。
+**前置条件：**
 
-在 `models_config.json` 的 provider 中添加 `op_reference`（如 `op://llmkeys/OpenAI/credential`）字段后即可使用：
+1. `brew install 1password-cli`
+2. **在 1Password 桌面应用里启用 CLI 集成**：Settings → Developer → 开启 "Integrate with 1Password CLI"。之后 `op account list` 能看到账号即可。
+   > ⚠️ 不要走 `op account add` 手动加账号——那条路需要 Emergency Kit 里的 34 位 Secret Key（**不是主密码**）。桌面 app 集成能省掉这一步。
+3. 1Password 里建 vault `llmkeys`，每个 provider 一条 "API Credential" 条目。
+4. 在 `models_config.json` 的 provider 节点里加 `op_reference`（如 `op://llmkeys/OpenAI/credential`）。
+
+配置完成后：
 
 ```bash
 uv run llm-sync-keys                        # 同步所有配置了 op_reference 的 provider
