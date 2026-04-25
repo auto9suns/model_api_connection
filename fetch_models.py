@@ -36,7 +36,7 @@ from _fetch_helpers import (
     fetch_siliconflow_pricing, fetch_provider,
 )
 
-CONFIG_PATH = Path(__file__).parent / "models_config.json"
+CONFIG_PATH = Path(__file__).parent / "model_connector" / "models_config.json"
 
 
 # ── Printer ────────────────────────────────────────────────────────────────────

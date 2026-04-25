@@ -8,7 +8,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-CONFIG_PATH = Path(__file__).parent / "models_config.json"
+CONFIG_PATH = Path(__file__).parent / "model_connector" / "models_config.json"
 
 GREEN  = "\033[92m"
 YELLOW = "\033[93m"

@@ -30,11 +30,12 @@ response = llm.chat("你好", provider="openai")
 
 | 文件 | 用途 |
 |------|------|
-| `model_connector.py` | 核心连接器 — 其他项目 import 这个 |
+| `model_connector/` | 核心连接器包 — 其他项目 import 这个 |
+| `model_connector/__init__.py` | 连接器实现（`LLMConnector`、`chat`、`strip_think_stream`） |
+| `model_connector/models_config.json` | 模型注册表（增删模型改这里） |
 | `paths.py` | 路径常量（API key 缓存目录、config 文件位置） |
 | `gemini_uploader.py` | 上传视频到 Gemini File API，等待处理完成，返回 URI |
 | `video_connector.py` | 统一视频理解接口，支持 Gemini / Qwen |
-| `models_config.json` | 模型注册表（增删模型改这里） |
 | `key_sync.py` | CLI 工具：从 1Password 同步 API key 到 `~/.config/llm/keys.env` |
 | `test_models.py` | CLI 工具：验证 API key 和模型连通性 |
 | `fetch_models.py` | CLI 工具：从 API 拉取最新模型列表 |
