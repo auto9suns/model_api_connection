@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -17,10 +18,10 @@ class LLMConfig:
 
     provider: str
     model: str
-    extra: dict = field(default_factory=dict)
+    extra: dict[str, Any] = field(default_factory=dict)
 
 
-def parse_llm_config(data: dict) -> LLMConfig:
+def parse_llm_config(data: dict[str, Any]) -> LLMConfig:
     """Construct LLMConfig from a dict, validating required fields.
 
     Suitable for extracting the llm: section from a larger config
@@ -44,7 +45,7 @@ def parse_llm_config(data: dict) -> LLMConfig:
                 f"{field_name} must be a non-empty string, got: {val!r}"
             )
 
-    extra = {k: v for k, v in data.items() if k not in ("provider", "model")}
+    extra: dict[str, Any] = {k: v for k, v in data.items() if k not in ("provider", "model")}
     return LLMConfig(provider=data["provider"], model=data["model"], extra=extra)
 
 
