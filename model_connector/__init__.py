@@ -46,6 +46,7 @@ _register_usage_log()
 
 import paths
 from paths import CONFIG_PATH
+from model_connector.config import LLMConfig, load_llm_config, parse_llm_config
 
 try:
     from dotenv import load_dotenv
@@ -55,7 +56,15 @@ except ImportError:
     pass
 
 
-__all__ = ["LLMConnector", "chat", "get_connector", "strip_think_stream"]
+__all__ = [
+    "LLMConnector",
+    "chat",
+    "get_connector",
+    "strip_think_stream",
+    "LLMConfig",
+    "load_llm_config",
+    "parse_llm_config",
+]
 
 
 # ── Main connector ─────────────────────────────────────────────────────────────
