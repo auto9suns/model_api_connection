@@ -1,13 +1,10 @@
 """Unit tests for model_connector — no real API calls needed."""
 
 import json
-import sys
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
 from model_connector import LLMConnector, strip_think_stream
 
 
@@ -227,3 +224,11 @@ def test_strip_think_unclosed_block():
     chunks = ["answer<think>partial reasoning"]
     result = "".join(strip_think_stream(iter(chunks)))
     assert result == "answer"
+
+
+def test_default_config_path_resolves():
+    """models_config.json must exist next to the installed module (editable or not)."""
+    import model_connector as mc
+    from pathlib import Path
+    config = Path(mc.__file__).parent / "models_config.json"
+    assert config.exists(), f"models_config.json not found at {config}"

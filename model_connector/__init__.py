@@ -12,7 +12,7 @@ Usage:
     response = llm.chat("你好", provider="siliconflow", model="deepseek-v3")
 
     # Streaming
-    for chunk in llm.chat("解释量子纠缠", provider="anthropic", model="sonnet-4.6", stream=True):
+    for chunk in llm.chat("解释量子纠缠", provider="anthropic", model="claude-sonnet-4.6", stream=True):
         print(chunk, end="", flush=True)
 
     # Multi-turn
@@ -46,6 +46,7 @@ _register_usage_log()
 
 import paths
 from paths import CONFIG_PATH
+from model_connector.config import LLMConfig, load_llm_config, parse_llm_config
 
 try:
     from dotenv import load_dotenv
@@ -55,7 +56,15 @@ except ImportError:
     pass
 
 
-__all__ = ["LLMConnector", "chat", "get_connector", "strip_think_stream"]
+__all__ = [
+    "LLMConnector",
+    "chat",
+    "get_connector",
+    "strip_think_stream",
+    "LLMConfig",
+    "load_llm_config",
+    "parse_llm_config",
+]
 
 
 # ── Main connector ─────────────────────────────────────────────────────────────

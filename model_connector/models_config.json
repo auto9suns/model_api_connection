@@ -16,22 +16,22 @@
     "anthropic": {
       "api_key_env": "ANTHROPIC_API_KEY",
       "op_reference": "op://llmkeys/Anthropic/credential",
-      "default_model": "sonnet-4.6",
+      "default_model": "claude-sonnet-4.6",
       "models": {
-        "opus-4.6":   "anthropic/claude-opus-4-6",
-        "sonnet-4.6": "anthropic/claude-sonnet-4-6",
-        "haiku-4.5":  "anthropic/claude-haiku-4-5-20251001"
+        "claude-opus-4.6":   "anthropic/claude-opus-4-6",
+        "claude-sonnet-4.6": "anthropic/claude-sonnet-4-6",
+        "claude-haiku-4.5":  "anthropic/claude-haiku-4-5-20251001"
       }
     },
     "gemini": {
       "api_key_env": "GEMINI_API_KEY",
       "op_reference": "op://llmkeys/Gemini/credential",
-      "default_model": "flash-2.5",
+      "default_model": "gemini-flash-2.5",
       "models": {
-        "flash-2.5":            "gemini/gemini-2.5-flash",
-        "pro-3.1-preview":      "gemini/gemini-3.1-pro-preview",
-        "pro-3.1-preview-tools":"gemini/gemini-3.1-pro-preview-customtools",
-        "pro-3-preview":        "gemini/gemini-3-pro-preview"
+        "gemini-flash-2.5":             "gemini/gemini-2.5-flash",
+        "gemini-pro-3.1-preview":       "gemini/gemini-3.1-pro-preview",
+        "gemini-pro-3.1-preview-tools": "gemini/gemini-3.1-pro-preview-customtools",
+        "gemini-pro-3-preview":         "gemini/gemini-3-pro-preview"
       }
     },
     "siliconflow": {
@@ -64,7 +64,7 @@
         "claude-opus-4.5":   "poe/Claude-Opus-4.5",
         "claude-sonnet-4.5": "poe/Claude-Sonnet-4.5",
         "claude-haiku-4.5":  "poe/Claude-Haiku-4.5",
-        "gemini-3-pro":      "poe/Gemini-3-Pro",
+        "gemini-pro-3":      "poe/Gemini-3-Pro",
         "gpt-4o":            "poe/GPT-4o",
         "grok-4":            "poe/Grok-4",
         "llama-3.1-405b":    "poe/Llama-3.1-405B"
@@ -74,13 +74,13 @@
       "api_key_env": "MEAI_API_KEY",
       "op_reference": "op://llmkeys/Meai/credential",
       "base_url": "https://api.meai.cloud/v1",
-      "default_model": "sonnet-4.6",
+      "default_model": "claude-sonnet-4.6",
       "models": {
-        "glm-5":     "openai/glm-5",
-        "glm-5.1":   "openai/glm-5.1",
-        "sonnet-4.6":"openai/claude-sonnet-4-6",
-        "opus-4.7":  "openai/claude-opus-4-7",
-        "flash-3":   "openai/gemini-3-flash"
+        "glm-5":             "openai/glm-5",
+        "glm-5.1":           "openai/glm-5.1",
+        "claude-sonnet-4.6": "openai/claude-sonnet-4-6",
+        "claude-opus-4.7":   "openai/claude-opus-4-7",
+        "gemini-flash-3":    "openai/gemini-3-flash"
       }
     }
   }

@@ -22,8 +22,8 @@ llm-stats = "cli.llm_stats:main"
 llm-sync-keys = "key_sync:main"
 
 [tool.setuptools]
-py-modules = ["model_connector", "video_connector", "gemini_uploader", "usage_log", "paths", "key_sync"]
-packages = ["cli"]
+py-modules = ["video_connector", "gemini_uploader", "usage_log", "paths", "key_sync"]
+packages = ["cli", "model_connector"]
 
 [tool.setuptools.package-data]
-"*" = ["models_config.json"]
+"model_connector" = ["models_config.json"]
