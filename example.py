@@ -26,8 +26,8 @@ def example_basic():
     print("\n=== OpenAI / gpt-4o ===")
     print(llm.chat("Explain LLMs in one sentence.", provider="openai", model="gpt-4o"))
 
-    print("\n=== Anthropic / sonnet-4.6 ===")
-    print(llm.chat("Explain LLMs in one sentence.", provider="anthropic", model="sonnet-4.6"))
+    print("\n=== Anthropic / claude-sonnet-4.6 ===")
+    print(llm.chat("Explain LLMs in one sentence.", provider="anthropic", model="claude-sonnet-4.6"))
 
     print("\n=== Poe / Claude-Sonnet-4.5 ===")
     print(llm.chat("Explain LLMs in one sentence.", provider="poe", model="Claude-Sonnet-4.5"))
@@ -42,9 +42,9 @@ def example_streaming():
         print(chunk, end="", flush=True)
     print()
 
-    print("\n=== Streaming: sonnet-4.6 ===")
+    print("\n=== Streaming: claude-sonnet-4.6 ===")
     for chunk in llm.chat("Write a haiku about Python.",
-                           provider="anthropic", model="sonnet-4.6", stream=True):
+                           provider="anthropic", model="claude-sonnet-4.6", stream=True):
         print(chunk, end="", flush=True)
     print()
 

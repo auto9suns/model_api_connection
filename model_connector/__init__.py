@@ -12,7 +12,7 @@ Usage:
     response = llm.chat("你好", provider="siliconflow", model="deepseek-v3")
 
     # Streaming
-    for chunk in llm.chat("解释量子纠缠", provider="anthropic", model="sonnet-4.6", stream=True):
+    for chunk in llm.chat("解释量子纠缠", provider="anthropic", model="claude-sonnet-4.6", stream=True):
         print(chunk, end="", flush=True)
 
     # Multi-turn

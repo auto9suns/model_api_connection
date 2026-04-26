@@ -129,7 +129,7 @@ response = llm.chat("Hi", provider="poe", model="Claude-Sonnet-4.5")
 ### 流式输出
 
 ```python
-for chunk in llm.chat("解释量子纠缠", provider="anthropic", model="sonnet-4.6", stream=True):
+for chunk in llm.chat("解释量子纠缠", provider="anthropic", model="claude-sonnet-4.6", stream=True):
     print(chunk, end="", flush=True)
 ```
 
@@ -173,7 +173,7 @@ litellm 会自动将 OpenAI 格式的 tools 定义转换为各 provider 的原�
 ```python
 from model_connector import chat
 
-response = chat("Hi", provider="gemini", model="gemini-2.5-flash")
+response = chat("Hi", provider="gemini", model="gemini-flash-2.5")
 ```
 
 ### 传递额外 API 参数
@@ -205,9 +205,9 @@ for chunk in strip_think_stream(stream):
 |----------|-----------------|------------------------|
 | openai | `gpt-4o` | `openai/gpt-4o` |
 | openai | `o4-mini` | `openai/o4-mini` |
-| anthropic | `sonnet-4.6` | `anthropic/claude-sonnet-4-6` |
-| anthropic | `haiku-4.5` | `anthropic/claude-haiku-4-5-20251001` |
-| gemini | `gemini-2.5-flash` | `gemini/gemini-2.5-flash` |
+| anthropic | `claude-sonnet-4.6` | `anthropic/claude-sonnet-4-6` |
+| anthropic | `claude-haiku-4.5` | `anthropic/claude-haiku-4-5-20251001` |
+| gemini | `gemini-flash-2.5` | `gemini/gemini-2.5-flash` |
 | siliconflow | `deepseek-v3` | `siliconflow/deepseek-ai/DeepSeek-V3` |
 | poe | `Claude-Sonnet-4.5` | `poe/Claude-Sonnet-4.5` |
 | meai | `claude-sonnet-4-6` | `openai/claude-sonnet-4-6` |
@@ -273,7 +273,7 @@ result = chat_with_video(
     "video.mp4",
     prompt="列出视频中出现的所有产品名称",
     provider="gemini",
-    model="gemini-2.5-flash",
+    model="gemini-flash-2.5",
 )
 
 # 使用 Qwen
@@ -481,7 +481,7 @@ uv run llm-sync-keys --dry-run              # 预览将要同步的内容，不�
 ```bash
 python test_models.py                              # 测试所有 provider 的默认模型
 python test_models.py --provider siliconflow --all  # 测试某个 provider 的所有模型
-python test_models.py --provider anthropic --model sonnet-4.6  # 测试特定模型
+python test_models.py --provider anthropic --model claude-sonnet-4.6  # 测试特定模型
 python test_models.py --all                         # 全量测试
 ```
 
