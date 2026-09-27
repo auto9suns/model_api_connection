@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > This history was reconstructed retroactively (bootstrap) from the git log — the
 > project shipped continuously on `main` before formal tagging began.
 
+## [Unreleased]
+退役本地明文 `~/.config/llm/keys.env` 缓存与 `key_sync.py` / `llm-sync-keys`，key 改由 `keyinit` 装进 macOS 钥匙串、shell 启动时导出成环境变量。
+
+### Removed
+- `key_sync.py` 与 `llm-sync-keys` console script —— 1Password → 本地明文文件的同步路径下线，`keyinit` 是唯一写入方，消除明文 key 落盘的风险。
+- `model_connector` 的 `load_dotenv(KEYS_ENV_PATH, override=True)` 自动加载分支，`paths.py` 的 `KEYS_ENV_DIR`/`KEYS_ENV_PATH` —— connector 现在只从 `os.environ` 取 key，不再依赖任何本地缓存文件。
+
+### Changed
+- 缺 key 时的报错信息改为指向 `keyinit status llm` / `! keyinit sync llm` —— 与新的取 key 路径保持一致，避免用户按旧提示误跑已删除的命令。
+
 ## [0.5.0] - 2026-04-26
 修复非 editable 安装丢失配置文件的打包 bug，收敛模型 key 命名规则，并新增 LLMConfig 配置解析助手 API。
 

@@ -36,7 +36,6 @@ response = llm.chat("你好", provider="openai")
 | `paths.py` | 路径常量（API key 缓存目录、config 文件位置） |
 | `gemini_uploader.py` | 上传视频到 Gemini File API，等待处理完成，返回 URI |
 | `video_connector.py` | 统一视频理解接口，支持 Gemini / Qwen |
-| `key_sync.py` | CLI 工具：从 1Password 同步 API key 到 `~/.config/llm/keys.env` |
 | `test_models.py` | CLI 工具：验证 API key 和模型连通性 |
 | `fetch_models.py` | CLI 工具：从 API 拉取最新模型列表 |
 | `_fetch_helpers.py` | fetch_models.py 的内部辅助模块 |
@@ -59,13 +58,7 @@ pip install -e ~/workspace/model_api_connection
 
 **2. 配置 API key**
 
-推荐方式：通过 `llm-sync-keys` 从 1Password 同步到 `~/.config/llm/keys.env`（详见下方 CLI 工具章节）：
-
-```bash
-uv run llm-sync-keys          # 需安装并登录 op CLI
-```
-
-`model_connector` 在 import 时会自动加载 `~/.config/llm/keys.env`，shell 中已导出的同名变量优先级更高，不会被覆盖。
+推荐方式：key 由 `keyinit` 装进 macOS 钥匙串，shell 启动时（`.zshrc`）自动读取并导出成同名环境变量。`model_connector` 只从 `os.environ` 取 key，不再自动加载任何本地文件。
 
 或直接导出环境变量：
 
@@ -450,31 +443,6 @@ cron / 长期脚本请设 `LLM_CALLER=<task-name>` 便于事后追溯。
 ---
 
 ## CLI 工具
-
-### 同步 API Key（从 1Password）
-
-`key_sync.py` 从 1Password 读取 API key，写入 `~/.config/llm/keys.env`（权限 600）。
-
-**前置条件：**
-
-1. `brew install 1password-cli`
-2. **在 1Password 桌面应用里启用 CLI 集成**：Settings → Developer → 开启 "Integrate with 1Password CLI"。之后 `op account list` 能看到账号即可。
-   > ⚠️ 不要走 `op account add` 手动加账号——那条路需要 Emergency Kit 里的 34 位 Secret Key（**不是主密码**）。桌面 app 集成能省掉这一步。
-3. 1Password 里建 vault `llmkeys`，每个 provider 一条 "API Credential" 条目。
-4. 在 `models_config.json` 的 provider 节点里加 `op_reference`（如 `op://llmkeys/OpenAI/credential`）。
-
-配置完成后：
-
-```bash
-uv run llm-sync-keys                        # 同步所有配置了 op_reference 的 provider
-uv run llm-sync-keys --provider openai      # 只同步 openai，保留其他 key 不变
-uv run llm-sync-keys --dry-run              # 预览将要同步的内容，不实际执行
-```
-
-**同步语义：**
-
-- **完整同步**（无 `--provider`）：**覆盖整个 keys.env 文件**。1Password 中配置的 key 是唯一的可信源（SSoT）；未在 1Password 中配置的 key（包括旧 key 和自定义 key）会被删除。
-- **单 provider 同步**（`--provider openai`）：**只更新指定 provider 对应的 key**，保留其他 key 不变。适合增量更新和保护本地自定义 key。
 
 ### 测试 API 连通性
 
