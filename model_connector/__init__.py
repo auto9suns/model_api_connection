@@ -35,7 +35,6 @@ Usage:
 """
 
 import json
-import os
 from pathlib import Path
 from typing import Iterator
 
@@ -46,6 +45,7 @@ _register_usage_log()
 
 from paths import CONFIG_PATH
 from model_connector.config import LLMConfig, load_llm_config, parse_llm_config
+from model_connector.keychain import api_key_from_env_or_keychain, failure_hint
 
 
 __all__ = [
@@ -167,10 +167,10 @@ class LLMConnector:
         if provider in self._api_keys_override:
             return self._api_keys_override[provider]
         env_var = prov_cfg.get("api_key_env", "")
-        key = os.environ.get(env_var, "")
+        key, reason = api_key_from_env_or_keychain(env_var)
         if not key:
             raise EnvironmentError(
-                f"API key for '{provider}' not found. "
+                f"API key for '{provider}' not found (keychain: {failure_hint(reason)}). "
                 f"Set the '{env_var}' environment variable, pass "
                 f"api_keys={{'{provider}': '...'}} to LLMConnector(), "
                 f"or run `keyinit status llm` to check the keychain "

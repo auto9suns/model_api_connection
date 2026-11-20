@@ -3,10 +3,11 @@ Helpers for fetch_models.py — provider fetchers, pricing, and formatting.
 """
 
 import json
-import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+
+from model_connector.keychain import api_key_from_env_or_keychain
 
 CONFIG_PATH = Path(__file__).parent / "model_connector" / "models_config.json"
 
@@ -235,9 +236,9 @@ def _fetch_gemini_native(api_key: str) -> list[dict]:
 
 def fetch_provider(provider: str, prov_cfg: dict) -> list[dict] | str:
     env_var = prov_cfg.get("api_key_env", "")
-    api_key = os.environ.get(env_var, "")
+    api_key, reason = api_key_from_env_or_keychain(env_var)
     if not api_key:
-        return f"[SKIP] {env_var} not set"
+        return f"[SKIP] {env_var} not available ({reason})"
     try:
         ptype    = prov_cfg.get("type")
         base_url = prov_cfg.get("base_url")
