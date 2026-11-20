@@ -11,10 +11,10 @@ Usage:
     )
 """
 import base64
-import os
 from pathlib import Path
 
 from model_connector import get_connector
+from model_connector.keychain import api_key_from_env_or_keychain, failure_hint
 
 VIDEO_INLINE_LIMIT = 20 * 1024 * 1024  # 20 MB
 
@@ -87,10 +87,11 @@ def _messages_base64(path: Path, prompt: str) -> list[dict]:
 
 def _messages_gemini_file_api(path: Path, prompt: str) -> list[dict]:
     from gemini_uploader import upload_video
-    api_key = os.environ.get("GEMINI_API_KEY", "")
+    api_key, reason = api_key_from_env_or_keychain("GEMINI_API_KEY")
     if not api_key:
         raise EnvironmentError(
-            "GEMINI_API_KEY not set. Export it or add to .env"
+            f"GEMINI_API_KEY not available (keychain: {failure_hint(reason)}). "
+            "Export it or add it to your dotenv file"
         )
     file_uri = upload_video(str(path), api_key)
     return [{

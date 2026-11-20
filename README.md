@@ -32,6 +32,7 @@ response = llm.chat("你好", provider="openai")
 |------|------|
 | `model_connector/` | 核心连接器包 — 其他项目 import 这个 |
 | `model_connector/__init__.py` | 连接器实现（`LLMConnector`、`chat`、`strip_think_stream`） |
+| `model_connector/keychain.py` | key 查找：先读环境变量，没有再从 macOS 钥匙串现取（`-a llm -s <变量名>`）；值只返回给调用方，不写回 `os.environ` |
 | `model_connector/models_config.json` | 模型注册表（增删模型改这里） |
 | `paths.py` | 路径常量（API key 缓存目录、config 文件位置） |
 | `gemini_uploader.py` | 上传视频到 Gemini File API，等待处理完成，返回 URI |
@@ -58,9 +59,11 @@ pip install -e ~/workspace/model_api_connection
 
 **2. 配置 API key**
 
-推荐方式：key 由 `keyinit` 装进 macOS 钥匙串，shell 启动时（`.zshrc`）自动读取并导出成同名环境变量。`model_connector` 只从 `os.environ` 取 key，不再自动加载任何本地文件。
+推荐方式：key 由 `keyinit` 装进 macOS 钥匙串（`-a llm`），shell 启动文件不再把它们导出成环境变量。`model_connector`（含 `video_connector.py` 与 `_fetch_helpers.py`）取 key 时先看同名环境变量，没有再用 `/usr/bin/security` 现取，取到的值只留在该次调用里，不写回 `os.environ`，也不自动加载任何本地文件。取不到时报错里带原因（`disabled` / `locked` / `missing` / `timeout` / `error`）和补救办法，不含 key 值。
 
-或直接导出环境变量：
+设环境变量 `LLM_KEYCHAIN=off` 可关掉钥匙串回退（测试环境默认如此，生产不设）。
+
+或直接导出环境变量（优先于钥匙串）：
 
 ```bash
 export OPENAI_API_KEY=sk-...
@@ -281,7 +284,7 @@ result = chat_with_video("video.mp4", prompt="描述视频内容", provider="qwe
 | ≥ 20 MB | gemini | Gemini File API（自动上传） |
 | ≥ 20 MB | qwen | base64 内联（Qwen 支持最大 2 GB） |
 
-环境变量：`GEMINI_API_KEY`（大视频走 File API 时必须设置）
+环境变量：`GEMINI_API_KEY`（大视频走 File API 时必须能取到：环境变量或钥匙串二选一）
 
 ---
 
